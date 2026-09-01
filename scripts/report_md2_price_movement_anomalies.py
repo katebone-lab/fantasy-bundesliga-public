@@ -48,7 +48,7 @@ def main() -> None:
         w.writerows(report)
 
     flagged_rows = [r for r in report if r["flagged"] == "yes"]
-    print(f"movement_rows={len(report)} flagged={len(flagged_rows)}")
+    print(f"movement_rows={len(report)} flagged={len(flagged_rows)} thresholds=abs>={ABS_WARN_M:.2f}m or pct>={PCT_WARN:.1f}%")
     for r in flagged_rows[:30]:
         print(f"{r['player']}: {r['md1_price_m']} -> {r['md2_price_m']} ({r['movement_m']}m, {r['movement_pct']}%)")
 
