@@ -50,7 +50,7 @@ except Exception as exc:
 
 st.title("Fantasy Bundesliga Lab")
 if application_mode.is_public:
-    st.caption("Public read-only deployment")
+    st.caption("Public read-only deployment · build transfer-analysis-2026-09-01")
 if initial_context.fantasy_player_count:
     st.caption(
         f"Manual Fantasy Bundesliga Matchday {initial_context.matchday} data, "
