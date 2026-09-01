@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import py_compile
+import sys
 from pathlib import Path
 
-from fixture_model import build_fixture_ratings, build_team_strengths, lineup_likelihood
-
-
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from fixture_model import build_fixture_ratings, build_team_strengths, lineup_likelihood
 
 
 def main() -> None:
