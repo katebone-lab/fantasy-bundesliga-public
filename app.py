@@ -27,6 +27,8 @@ st.set_page_config(page_title="Fantasy Bundesliga Lab", page_icon="⚽", layout=
 install_page_style()
 
 application_mode = get_application_mode()
+if application_mode.is_public:
+    from ui.public_team_tab import render_public_team_tab
 if application_mode.allows_writes:
     from fantasy_ingestion.repository import FantasyIngestionRepository
     from ui.ingestion_tab import render_ingestion_tab
@@ -118,10 +120,10 @@ display_summary_metrics(
 )
 
 if application_mode.is_public:
-    players_tab, leaders_tab, stats_tab = st.tabs(
-        ["Players", "Position leaders", "Match stats"]
+    players_tab, team_tab, leaders_tab, stats_tab = st.tabs(
+        ["Players", "My Team", "Position leaders", "Match stats"]
     )
-    team_tab = quality_tab = ingestion_tab = None
+    quality_tab = ingestion_tab = None
 else:
     players_tab, team_tab, leaders_tab, stats_tab, quality_tab, ingestion_tab = st.tabs(
         ["Players", "My Team", "Position leaders", "Match stats", "Data quality", "Ingestion"]
@@ -132,14 +134,17 @@ with players_tab:
 
 if team_tab is not None:
     with team_tab:
-        render_team_tab(
-            repository,
-            active_season,
-            active_matchday,
-            planning_fantasy,
-            planning_combined,
-            planning_matchday,
-        )
+        if application_mode.is_public:
+            render_public_team_tab(repository)
+        else:
+            render_team_tab(
+                repository,
+                active_season,
+                active_matchday,
+                planning_fantasy,
+                planning_combined,
+                planning_matchday,
+            )
 
 with leaders_tab:
     render_leaders_tab(fantasy, active_season, active_matchday)
