@@ -110,19 +110,20 @@ def _build_candidate_pool(
             api_context, on=["player", "club"], how="left", suffixes=("", "_api")
         )
 
-    prior_prices = repository.get_effective_prices(season, performance_matchday).copy()
-    if not prior_prices.empty and {"player", "price_m"}.issubset(prior_prices.columns):
-        prior_prices = prior_prices[["player", "price_m"]].drop_duplicates(
+    price_history = repository.get_effective_prices(season, matchday).copy()
+    if not price_history.empty and {"player", "price_movement_m"}.issubset(
+        price_history.columns
+    ):
+        price_history = price_history[["player", "price_movement_m"]].drop_duplicates(
             subset=["player"], keep="first"
         )
-        prior_prices = prior_prices.rename(columns={"price_m": "prior_price_m"})
-        planning = planning.merge(prior_prices, on="player", how="left")
+        planning = planning.merge(price_history, on="player", how="left")
     else:
-        planning["prior_price_m"] = pd.NA
+        planning["price_movement_m"] = pd.NA
 
     planning["price_m"] = pd.to_numeric(planning["price_m"], errors="coerce")
-    planning["prior_price_m"] = pd.to_numeric(
-        planning["prior_price_m"], errors="coerce"
+    planning["price_movement_m"] = pd.to_numeric(
+        planning["price_movement_m"], errors="coerce"
     )
     planning["matchday_points"] = pd.to_numeric(
         planning["matchday_points"], errors="coerce"
@@ -135,9 +136,10 @@ def _build_candidate_pool(
     planning["points_per_minute"] = planning["matchday_points"].div(
         planning["minutes"].where(planning["minutes"] > 0)
     )
-    planning["week_price_change_m"] = planning["price_m"] - planning["prior_price_m"]
-    planning["week_price_change_pct"] = planning["week_price_change_m"].div(
-        planning["prior_price_m"].where(planning["prior_price_m"] > 0)
+    planning["week_price_change_m"] = planning["price_movement_m"]
+    implied_prior_price = planning["price_m"] - planning["price_movement_m"]
+    planning["week_price_change_pct"] = planning["price_movement_m"].div(
+        implied_prior_price.where(implied_prior_price > 0)
     ) * 100
     return planning
 
@@ -177,7 +179,7 @@ def _render_candidate_detail(candidate: pd.Series) -> None:
         "Cash after transfer",
         "—" if pd.isna(candidate.get("cash_after_transfer_m")) else f"£{candidate['cash_after_transfer_m']:.2f}m",
     )
-    row1[3].metric("Change since MD1", _price_movement_label(candidate))
+    row1[3].metric("Price movement", _price_movement_label(candidate))
     row1[4].metric(
         "MD1 points",
         "—" if pd.isna(candidate.get("matchday_points")) else f"{candidate['matchday_points']:.0f}",
@@ -199,7 +201,8 @@ def _render_candidate_detail(candidate: pd.Series) -> None:
     st.caption(
         "Cash impact is the extra cash needed after selling the selected current player, or the cash released "
         "if the replacement is cheaper. Cash after transfer shows the balance left for another move. "
-        "Change since MD1 is shown only where both published MD1 and captured MD2 prices exist. "
+        "Price movement uses the captured Fantasy Bundesliga price-movement field for the Matchday 2 price. "
+        "The percentage is derived only when that movement implies a valid prior price. "
         "Points per minute can make short substitute appearances look unusually strong, so minutes are always shown alongside it."
     )
 
@@ -307,7 +310,7 @@ def _render_transfer_analysis(
             "Points per minute",
             "Points per £m",
             "API rating",
-            "Price rise since MD1",
+            "Price movement",
             "Price",
         ],
         key=f"public_transfer_rank_{season}_{matchday}",
@@ -317,7 +320,7 @@ def _render_transfer_analysis(
         "Points per minute": "points_per_minute",
         "Points per £m": "points_per_m",
         "API rating": "rating",
-        "Price rise since MD1": "week_price_change_pct",
+        "Price movement": "week_price_change_m",
         "Price": "price_m",
     }[rank_label]
     ascending = rank_label == "Price"
@@ -354,8 +357,8 @@ def _render_transfer_analysis(
             "price_m": "MD2 price (£m)",
             "cash_impact": "Cash impact",
             "cash_after_transfer_m": "Cash after transfer (£m)",
-            "week_price_change_m": "Change since MD1 (£m)",
-            "week_price_change_pct": "Change since MD1 (%)",
+            "week_price_change_m": "Price movement (£m)",
+            "week_price_change_pct": "Price movement (%)",
             "matchday_points": "MD1 points",
             "points_per_minute": "Points/min",
             "points_per_m": "Points per £m",
@@ -371,8 +374,8 @@ def _render_transfer_analysis(
         column_config={
             "MD2 price (£m)": st.column_config.NumberColumn(format="%.2f"),
             "Cash after transfer (£m)": st.column_config.NumberColumn(format="%.2f"),
-            "Change since MD1 (£m)": st.column_config.NumberColumn(format="%+.2f"),
-            "Change since MD1 (%)": st.column_config.NumberColumn(format="%+.1f%%"),
+            "Price movement (£m)": st.column_config.NumberColumn(format="%+.2f"),
+            "Price movement (%)": st.column_config.NumberColumn(format="%+.1f%%"),
             "MD1 points": st.column_config.NumberColumn(format="%.0f"),
             "Points/min": st.column_config.NumberColumn(format="%.2f"),
             "Points per £m": st.column_config.NumberColumn(format="%.1f"),
@@ -385,7 +388,7 @@ def _render_transfer_analysis(
         f"{len(valid)} valid replacements in the full pool; {len(shortlist)} match the optional filters; "
         f"showing the top {min(12, len(shortlist))}. Cash impact shows how much of the current cash balance "
         "the swap uses or releases after selling the selected player; cash after transfer is the remaining balance. "
-        "Week-on-week price movement is shown only where both genuine MD1 and captured MD2 prices exist. "
+        "Price movement uses the captured Matchday 2 price-movement fact rather than subtracting two differently scoped price records. "
         "Points/min is most useful alongside the minutes column, especially for late substitutes and other small samples. "
         "Club and position use the latest published historical context because explicit Matchday 2 planning context has not yet been captured."
     )
