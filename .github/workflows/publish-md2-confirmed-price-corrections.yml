@@ -1,0 +1,36 @@
+name: Publish MD2 confirmed price corrections
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - data/md2_confirmed_price_corrections.csv
+      - scripts/apply_md2_confirmed_price_corrections.py
+      - .github/workflows/publish-md2-confirmed-price-corrections.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply confirmed MD2 screenshot corrections
+        run: python scripts/apply_md2_confirmed_price_corrections.py
+      - name: Commit corrected public database
+        run: |
+          if git diff --quiet -- data/fantasy_bundesliga.sqlite; then
+            echo "Database already contains the confirmed corrections."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/fantasy_bundesliga.sqlite
+          git commit -m "Publish confirmed MD2 price corrections"
+          git push
