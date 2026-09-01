@@ -17,22 +17,20 @@ def main():
     with sqlite3.connect(DB) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute('''
-            SELECT p.canonical_name AS player,
-                   fpm.fantasy_position AS position,
-                   fpm.matchday_points AS md1_points,
+            SELECT v.player_id,
+                   v.player,
+                   v.fantasy_position AS position,
+                   v.matchday_points AS md1_points,
                    pr1.price_hundredths_m/100.0 AS md1_price_m,
                    pr2.price_hundredths_m/100.0 AS md2_price_m
-            FROM fantasy_player_matchdays fpm
-            JOIN players p ON p.player_id=fpm.player_id
-            JOIN matchdays md ON md.matchday_id=fpm.matchday_id
-            JOIN seasons s ON s.season_id=md.season_id
-            LEFT JOIN fantasy_player_prices pr1 ON pr1.player_id=p.player_id AND pr1.effective_matchday_id=(
+            FROM vw_fantasy_player_matchday v
+            LEFT JOIN fantasy_player_prices pr1 ON pr1.player_id=v.player_id AND pr1.effective_matchday_id=(
                 SELECT md1.matchday_id FROM matchdays md1 JOIN seasons s1 ON s1.season_id=md1.season_id
                 WHERE s1.start_year=2026 AND md1.matchday_number=1)
-            LEFT JOIN fantasy_player_prices pr2 ON pr2.player_id=p.player_id AND pr2.effective_matchday_id=(
+            LEFT JOIN fantasy_player_prices pr2 ON pr2.player_id=v.player_id AND pr2.effective_matchday_id=(
                 SELECT md2.matchday_id FROM matchdays md2 JOIN seasons s2 ON s2.season_id=md2.season_id
                 WHERE s2.start_year=2026 AND md2.matchday_number=2)
-            WHERE s.start_year=2026 AND md.matchday_number=1
+            WHERE v.season=2026 AND v.matchday=1
         ''').fetchall()
 
     by_name = {r['player']: r for r in rows}
