@@ -6,18 +6,12 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from app_matching import merge_with_stats
 from data_repository import FantasyRepository
 
 
 PUBLIC_TEAM_ROOT = Path(__file__).resolve().parents[1] / "data" / "public_team"
 POSITION_ORDER = {"GK": 0, "DEF": 1, "MID": 2, "FOR": 3}
-
-
-def _load_public_team_snapshot(season: int, matchday: int) -> dict | None:
-    path = PUBLIC_TEAM_ROOT / f"{season}_md{matchday:02d}.json"
-    if not path.exists():
-        return None
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _build_public_team_view(
@@ -86,6 +80,176 @@ def _render_team_table(frame: pd.DataFrame, heading: str, points_label: str) -> 
     )
 
 
+def _build_candidate_pool(
+    repository: FantasyRepository,
+    season: int,
+    matchday: int,
+) -> pd.DataFrame:
+    """Build a read-only transfer candidate pool from published temporal facts."""
+    planning = repository.get_planning_players(season, matchday).copy()
+    if planning.empty:
+        return planning
+
+    performance_matchday = max(matchday - 1, 1)
+    performance = repository.get_fantasy_players(season, performance_matchday)
+    stats = repository.get_match_stats(season, performance_matchday).data
+    name_map = repository.get_approved_name_map(season, performance_matchday)
+    manual_only = repository.get_manual_only_players(season, performance_matchday)
+    combined = merge_with_stats(performance, stats, name_map, manual_only)
+
+    context_columns = [
+        column
+        for column in ["player", "club", "minutes", "rating"]
+        if column in combined.columns
+    ]
+    if context_columns:
+        api_context = combined[context_columns].drop_duplicates(
+            subset=["player", "club"], keep="first"
+        )
+        planning = planning.merge(
+            api_context, on=["player", "club"], how="left", suffixes=("", "_api")
+        )
+
+    planning["price_m"] = pd.to_numeric(planning["price_m"], errors="coerce")
+    planning["matchday_points"] = pd.to_numeric(
+        planning["matchday_points"], errors="coerce"
+    )
+    planning["points_per_m"] = planning["matchday_points"].div(
+        planning["price_m"].where(planning["price_m"] > 0)
+    )
+    return planning
+
+
+def _render_transfer_analysis(
+    repository: FantasyRepository,
+    team: pd.DataFrame,
+    team_record: dict,
+) -> None:
+    st.markdown("---")
+    st.markdown("### Transfer analysis")
+    st.caption(
+        "Read-only shortlist using published Matchday 1 performance and captured Matchday 2 prices. "
+        "Candidates must be in the same position, affordable with current cash, outside the current squad, "
+        "and compatible with the three-player-per-club limit. No transfer is applied from this view."
+    )
+
+    if team.empty:
+        st.info("No squad is available for transfer analysis.")
+        return
+
+    season = int(team_record["season"])
+    matchday = int(team_record["matchday"])
+    cash_m = float(team_record.get("cash_m", 0.0))
+    candidates = _build_candidate_pool(repository, season, matchday)
+    if candidates.empty:
+        st.info("No published planning candidates are available yet.")
+        return
+
+    outgoing_options = team.sort_values(
+        ["position_order", "player"]
+    )["player"].tolist()
+    outgoing_name = st.selectbox(
+        "Player to compare for replacement",
+        options=outgoing_options,
+        key=f"public_transfer_out_{season}_{matchday}",
+    )
+    outgoing = team.loc[team["player"] == outgoing_name].iloc[0]
+    outgoing_price = float(outgoing["display_price_m"])
+    available_budget = round(cash_m + outgoing_price, 2)
+
+    squad_names = set(team["player"].astype(str))
+    remaining_club_counts = (
+        team.loc[team["player"] != outgoing_name, "club"].value_counts().to_dict()
+    )
+
+    valid = candidates[
+        (candidates["fantasy_position"] == outgoing["position"])
+        & (~candidates["player"].isin(squad_names))
+        & (candidates["price_m"].notna())
+        & (candidates["price_m"] <= available_budget)
+    ].copy()
+    valid = valid[
+        valid["club"].map(lambda club: remaining_club_counts.get(club, 0) < 3)
+    ].copy()
+
+    if valid.empty:
+        st.warning("No valid replacements are available within this budget.")
+        return
+
+    valid["price_change_m"] = valid["price_m"] - outgoing_price
+    valid["points_change"] = valid["matchday_points"] - pd.to_numeric(
+        outgoing["matchday_points"], errors="coerce"
+    )
+
+    rank_label = st.selectbox(
+        "Rank shortlist by",
+        options=["MD1 points", "Points per £m", "API rating", "Price"],
+        key=f"public_transfer_rank_{season}_{matchday}",
+    )
+    rank_column = {
+        "MD1 points": "matchday_points",
+        "Points per £m": "points_per_m",
+        "API rating": "rating",
+        "Price": "price_m",
+    }[rank_label]
+    ascending = rank_label == "Price"
+
+    metric1, metric2, metric3 = st.columns(3)
+    metric1.metric("Current planning price", f"£{outgoing_price:.2f}m")
+    metric2.metric("Cash available", f"£{cash_m:.2f}m")
+    metric3.metric("Maximum replacement price", f"£{available_budget:.2f}m")
+
+    ranked = valid.sort_values(
+        rank_column, ascending=ascending, na_position="last"
+    ).head(12)
+    view_columns = [
+        "player",
+        "club",
+        "price_m",
+        "matchday_points",
+        "points_per_m",
+        "minutes",
+        "rating",
+        "price_change_m",
+        "points_change",
+    ]
+    for column in view_columns:
+        if column not in ranked.columns:
+            ranked[column] = pd.NA
+    view = ranked[view_columns].rename(
+        columns={
+            "player": "Candidate",
+            "club": "Club",
+            "price_m": "MD2 price (£m)",
+            "matchday_points": "MD1 points",
+            "points_per_m": "Points per £m",
+            "minutes": "API minutes",
+            "rating": "API rating",
+            "price_change_m": "Price vs current (£m)",
+            "points_change": "MD1 points vs current",
+        }
+    )
+    st.dataframe(
+        view,
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "MD2 price (£m)": st.column_config.NumberColumn(format="%.2f"),
+            "MD1 points": st.column_config.NumberColumn(format="%.0f"),
+            "Points per £m": st.column_config.NumberColumn(format="%.1f"),
+            "API minutes": st.column_config.NumberColumn(format="%.0f"),
+            "API rating": st.column_config.NumberColumn(format="%.1f"),
+            "Price vs current (£m)": st.column_config.NumberColumn(format="%+.2f"),
+            "MD1 points vs current": st.column_config.NumberColumn(format="%+.0f"),
+        },
+    )
+    st.caption(
+        f"{len(valid)} valid replacements found; showing the top {min(12, len(valid))}. "
+        "Club and position use the latest published historical context because explicit Matchday 2 "
+        "planning context has not yet been captured."
+    )
+
+
 def render_public_team_tab(repository: FantasyRepository) -> None:
     available = sorted(PUBLIC_TEAM_ROOT.glob("*_md*.json"))
     if not available:
@@ -96,7 +260,10 @@ def render_public_team_tab(repository: FantasyRepository) -> None:
     for path in available:
         record = json.loads(path.read_text(encoding="utf-8"))
         records.append((path, record))
-    records.sort(key=lambda item: (int(item[1]["season"]), int(item[1]["matchday"])), reverse=True)
+    records.sort(
+        key=lambda item: (int(item[1]["season"]), int(item[1]["matchday"])),
+        reverse=True,
+    )
     _, team_record = records[0]
 
     season = int(team_record["season"])
@@ -118,7 +285,9 @@ def render_public_team_tab(repository: FantasyRepository) -> None:
     metric1.metric("Formation", team_record.get("formation", "—"))
     metric2.metric("Planning squad value", f"£{planning_value:.2f}m")
     metric3.metric("Cash", f"£{cash_m:.2f}m")
-    metric4.metric(f"MD{matchday} prices captured", f"{known_md_price_count}/{len(team)}")
+    metric4.metric(
+        f"MD{matchday} prices captured", f"{known_md_price_count}/{len(team)}"
+    )
 
     if known_md_price_count < len(team):
         st.info(
@@ -131,3 +300,4 @@ def render_public_team_tab(repository: FantasyRepository) -> None:
     bench = team[team["slot"] == "bench"].copy()
     _render_team_table(starters, "Starting XI", points_label)
     _render_team_table(bench, "Bench", points_label)
+    _render_transfer_analysis(repository, team, team_record)
