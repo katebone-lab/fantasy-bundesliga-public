@@ -79,7 +79,7 @@ def main() -> None:
             # operational MD1 performance fact; do not rewrite performance facts here.
             perf = conn.execute(
                 """SELECT matchday_points FROM vw_fantasy_player_matchday
-                   WHERE fantasy_player_id=? AND season=2026 AND matchday=1""",
+                   WHERE player_id=? AND season=2026 AND matchday=1""",
                 (player_id,),
             ).fetchone()
             expected_points = int(row["md1_points"])
@@ -130,8 +130,6 @@ def main() -> None:
         if md1_count != 255 or md2_count != 222:
             raise SystemExit(f"Unexpected price counts: MD1={md1_count}, MD2={md2_count}")
 
-        # Ensure the seven formerly implausible rows now reproduce movement from the
-        # corrected MD1 opening baseline rather than storing an independent movement.
         movements = conn.execute(
             """SELECT player,price_m,price_movement_hundredths_m/100.0 AS movement_m
                FROM vw_fantasy_price_history
