@@ -1,0 +1,36 @@
+name: Publish user-confirmed MD2 prices
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/md2_user_confirmed_prices_points.csv'
+      - 'scripts/apply_md2_user_confirmed_prices_points.py'
+      - '.github/workflows/publish-md2-user-confirmed-prices-points.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply user-confirmed MD2 prices
+        run: python scripts/apply_md2_user_confirmed_prices_points.py
+      - name: Commit corrected public database
+        run: |
+          if git diff --quiet -- data/fantasy_bundesliga.sqlite; then
+            echo "Database already contains the user-confirmed corrections."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/fantasy_bundesliga.sqlite
+          git commit -m "Publish seven user-confirmed MD2 price corrections"
+          git push
