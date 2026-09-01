@@ -42,6 +42,10 @@ def ranked_api_candidates(
 
 def apply_name_map(fantasy: pd.DataFrame, name_map: pd.DataFrame) -> pd.DataFrame:
     out = fantasy.copy()
+    if "player_key" not in out.columns:
+        out["player_key"] = out["player"].map(normalise_text)
+    if "club_key" not in out.columns:
+        out["club_key"] = out["club"].map(normalise_club)
     out["match_player_key"] = out["player_key"]
     if name_map.empty:
         return out
@@ -78,6 +82,13 @@ def merge_with_stats(
             {True: "Manual-only", False: "Unresolved"}
         )
         return out
+
+    stats = stats.copy()
+    if "player_key" not in stats.columns:
+        stats["player_key"] = stats["player"].map(normalise_text)
+    if "club_key" not in stats.columns:
+        team_column = "team" if "team" in stats.columns else "club"
+        stats["club_key"] = stats[team_column].map(normalise_club)
 
     keep = [
         "player_key", "club_key", "api_player_id", "fixture_id", "date", "status", "team",
