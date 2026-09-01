@@ -8,6 +8,7 @@ import streamlit as st
 
 from app_matching import merge_with_stats
 from data_repository import FantasyRepository
+from fixture_model import add_planning_components
 
 
 PUBLIC_TEAM_ROOT = Path(__file__).resolve().parents[1] / "data" / "public_team"
@@ -99,7 +100,7 @@ def _build_candidate_pool(
 
     context_columns = [
         column
-        for column in ["player", "club", "minutes", "rating"]
+        for column in ["player", "club", "minutes", "rating", "substitute"]
         if column in combined.columns
     ]
     if context_columns:
@@ -141,13 +142,14 @@ def _build_candidate_pool(
     planning["week_price_change_pct"] = planning["price_movement_m"].div(
         implied_prior_price.where(implied_prior_price > 0)
     ) * 100
-    return planning
+    return add_planning_components(planning, matchday)
 
 
 def _candidate_label(row: pd.Series) -> str:
     points = "—" if pd.isna(row.get("matchday_points")) else f"{row['matchday_points']:.0f} pts"
     minutes = "—" if pd.isna(row.get("minutes")) else f"{row['minutes']:.0f} min"
-    return f"{row['player']} · {row['club']} · £{row['price_m']:.2f}m · {points} · {minutes}"
+    fixture = row.get("fixture_label", "Unknown")
+    return f"{row['player']} · {row['club']} · £{row['price_m']:.2f}m · {points} · {minutes} · {fixture}"
 
 
 def _cash_impact_label(value: float | int | None) -> str:
@@ -198,12 +200,33 @@ def _render_candidate_detail(candidate: pd.Series) -> None:
         "API rating",
         "—" if pd.isna(candidate.get("rating")) else f"{candidate['rating']:.1f}",
     )
+
+    row3 = st.columns(4)
+    opponent = candidate.get("opponent")
+    venue = candidate.get("venue")
+    row3[0].metric(
+        "MD2 fixture",
+        "—" if pd.isna(opponent) else f"{venue} vs {opponent}",
+    )
+    row3[1].metric(
+        "Fixture ease",
+        "—" if pd.isna(candidate.get("fixture_ease")) else f"{candidate['fixture_ease']:.0f}/100",
+        candidate.get("fixture_label") if pd.notna(candidate.get("fixture_ease")) else None,
+    )
+    row3[2].metric(
+        "Lineup likelihood",
+        "—" if pd.isna(candidate.get("lineup_likelihood")) else f"{candidate['lineup_likelihood']:.0f}%",
+        candidate.get("lineup_label") if pd.notna(candidate.get("lineup_likelihood")) else None,
+    )
+    row3[3].metric(
+        "MD2 planning score",
+        "—" if pd.isna(candidate.get("planning_score")) else f"{candidate['planning_score']:.0f}/100",
+    )
+
     st.caption(
-        "Cash impact is the extra cash needed after selling the selected current player, or the cash released "
-        "if the replacement is cheaper. Cash after transfer shows the balance left for another move. "
-        "Price movement uses the captured Fantasy Bundesliga price-movement field for the Matchday 2 price. "
-        "The percentage is derived only when that movement implies a valid prior price. "
-        "Points per minute can make short substitute appearances look unusually strong, so minutes are always shown alongside it."
+        "Fixture ease is calculated from a transparent team-strength model: 70% prior-season attack/defence evidence and 30% smoothed current-season results, with a small home/away adjustment. "
+        "Lineup likelihood is currently an MD1-role proxy based on whether the player started and how many minutes they played; it is not a predicted team sheet and should later be overridden by injury/news/probable-lineup evidence. "
+        "The planning score combines MD1 performance (30%), value (15%), fixture (30%) and lineup likelihood (25%). Each component remains visible so the score is not a black box."
     )
 
 
@@ -215,9 +238,8 @@ def _render_transfer_analysis(
     st.markdown("---")
     st.markdown("### Transfer analysis")
     st.caption(
-        "Read-only shortlist using published Matchday 1 performance and captured Matchday 2 prices. "
-        "Candidates must be in the same position, affordable with current cash, outside the current squad, "
-        "and compatible with the three-player-per-club limit. No transfer is applied from this view."
+        "Read-only shortlist using Matchday 1 performance, captured Matchday 2 prices, Matchday 2 fixtures, an early-season attack/defence strength model and an MD1-role lineup proxy. "
+        "Candidates must be in the same position, affordable with current cash, outside the current squad, and compatible with the three-player-per-club limit. No transfer is applied from this view."
     )
 
     if team.empty:
@@ -306,6 +328,9 @@ def _render_transfer_analysis(
     rank_label = st.selectbox(
         "Rank shortlist by",
         options=[
+            "MD2 planning score",
+            "Fixture ease",
+            "Lineup likelihood",
             "MD1 points",
             "Points per minute",
             "Points per £m",
@@ -316,6 +341,9 @@ def _render_transfer_analysis(
         key=f"public_transfer_rank_{season}_{matchday}",
     )
     rank_column = {
+        "MD2 planning score": "planning_score",
+        "Fixture ease": "fixture_ease",
+        "Lineup likelihood": "lineup_likelihood",
         "MD1 points": "matchday_points",
         "Points per minute": "points_per_minute",
         "Points per £m": "points_per_m",
@@ -335,6 +363,13 @@ def _render_transfer_analysis(
     view_columns = [
         "player",
         "club",
+        "opponent",
+        "venue",
+        "fixture_ease",
+        "fixture_label",
+        "lineup_likelihood",
+        "lineup_label",
+        "planning_score",
         "price_m",
         "cash_impact",
         "cash_after_transfer_m",
@@ -354,6 +389,13 @@ def _render_transfer_analysis(
         columns={
             "player": "Candidate",
             "club": "Club",
+            "opponent": "MD2 opponent",
+            "venue": "H/A",
+            "fixture_ease": "Fixture ease",
+            "fixture_label": "Fixture",
+            "lineup_likelihood": "Lineup likelihood",
+            "lineup_label": "MD1 role basis",
+            "planning_score": "MD2 planning score",
             "price_m": "MD2 price (£m)",
             "cash_impact": "Cash impact",
             "cash_after_transfer_m": "Cash after transfer (£m)",
@@ -372,6 +414,9 @@ def _render_transfer_analysis(
         width="stretch",
         hide_index=True,
         column_config={
+            "Fixture ease": st.column_config.NumberColumn(format="%.0f"),
+            "Lineup likelihood": st.column_config.NumberColumn(format="%.0f%%"),
+            "MD2 planning score": st.column_config.NumberColumn(format="%.0f"),
             "MD2 price (£m)": st.column_config.NumberColumn(format="%.2f"),
             "Cash after transfer (£m)": st.column_config.NumberColumn(format="%.2f"),
             "Price movement (£m)": st.column_config.NumberColumn(format="%+.2f"),
@@ -385,12 +430,10 @@ def _render_transfer_analysis(
         },
     )
     st.caption(
-        f"{len(valid)} valid replacements in the full pool; {len(shortlist)} match the optional filters; "
-        f"showing the top {min(12, len(shortlist))}. Cash impact shows how much of the current cash balance "
-        "the swap uses or releases after selling the selected player; cash after transfer is the remaining balance. "
-        "Price movement uses the captured Matchday 2 price-movement fact rather than subtracting two differently scoped price records. "
-        "Points/min is most useful alongside the minutes column, especially for late substitutes and other small samples. "
-        "Club and position use the latest published historical context because explicit Matchday 2 planning context has not yet been captured."
+        f"{len(valid)} valid replacements in the full pool; {len(shortlist)} match the optional filters; showing the top {min(12, len(shortlist))}. "
+        "Fixture ease is position-sensitive: forwards are driven mostly by the opponent's defensive strength, defenders/keepers mostly by opponent attacking strength, and midfielders use both. "
+        "Team strength blends 70% 2025/26 evidence with 30% smoothed 2026/27 results, so Matchday 1 matters without overwhelming the prior. "
+        "The lineup percentage is an MD1-role prior, not a live injury/probable-lineup forecast. Club and position still use the latest published historical context where explicit Matchday 2 planning context has not yet been captured."
     )
 
 
@@ -417,8 +460,7 @@ def render_public_team_tab(repository: FantasyRepository) -> None:
 
     st.subheader(f"My Team · Matchday {matchday}")
     st.caption(
-        "Read-only planning snapshot. This view contains only the published squad, prior-matchday "
-        "performance and captured planning prices; notes, transfer history and editing controls are excluded."
+        "Read-only planning snapshot. This view contains only the published squad, prior-matchday performance and captured planning prices; notes, transfer history and editing controls are excluded."
     )
 
     known_md_price_count = int(team["price_m"].notna().sum()) if not team.empty else 0
@@ -435,8 +477,7 @@ def render_public_team_tab(repository: FantasyRepository) -> None:
 
     if known_md_price_count < len(team):
         st.info(
-            f"Only {known_md_price_count} of {len(team)} squad members have a captured Matchday {matchday} "
-            "price. Missing prices use the last recorded squad valuation and are labelled accordingly."
+            f"Only {known_md_price_count} of {len(team)} squad members have a captured Matchday {matchday} price. Missing prices use the last recorded squad valuation and are labelled accordingly."
         )
 
     points_label = f"MD{performance_matchday} points"
