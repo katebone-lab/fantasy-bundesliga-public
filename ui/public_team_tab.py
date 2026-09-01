@@ -110,7 +110,20 @@ def _build_candidate_pool(
             api_context, on=["player", "club"], how="left", suffixes=("", "_api")
         )
 
+    prior_prices = repository.get_effective_prices(season, performance_matchday).copy()
+    if not prior_prices.empty and {"player", "price_m"}.issubset(prior_prices.columns):
+        prior_prices = prior_prices[["player", "price_m"]].drop_duplicates(
+            subset=["player"], keep="first"
+        )
+        prior_prices = prior_prices.rename(columns={"price_m": "prior_price_m"})
+        planning = planning.merge(prior_prices, on="player", how="left")
+    else:
+        planning["prior_price_m"] = pd.NA
+
     planning["price_m"] = pd.to_numeric(planning["price_m"], errors="coerce")
+    planning["prior_price_m"] = pd.to_numeric(
+        planning["prior_price_m"], errors="coerce"
+    )
     planning["matchday_points"] = pd.to_numeric(
         planning["matchday_points"], errors="coerce"
     )
@@ -122,6 +135,10 @@ def _build_candidate_pool(
     planning["points_per_minute"] = planning["matchday_points"].div(
         planning["minutes"].where(planning["minutes"] > 0)
     )
+    planning["week_price_change_m"] = planning["price_m"] - planning["prior_price_m"]
+    planning["week_price_change_pct"] = planning["week_price_change_m"].div(
+        planning["prior_price_m"].where(planning["prior_price_m"] > 0)
+    ) * 100
     return planning
 
 
@@ -131,27 +148,52 @@ def _candidate_label(row: pd.Series) -> str:
     return f"{row['player']} · {row['club']} · £{row['price_m']:.2f}m · {points} · {minutes}"
 
 
+def _cost_saving_label(value: float | int | None) -> str:
+    if value is None or pd.isna(value):
+        return "—"
+    value = float(value)
+    if abs(value) < 0.005:
+        return "No change"
+    if value > 0:
+        return f"£{value:.2f}m cost"
+    return f"£{abs(value):.2f}m saving"
+
+
+def _price_movement_label(candidate: pd.Series) -> str:
+    change = candidate.get("week_price_change_m")
+    pct = candidate.get("week_price_change_pct")
+    if pd.isna(change):
+        return "—"
+    pct_text = "" if pd.isna(pct) else f" ({pct:+.1f}%)"
+    return f"{change:+.2f}m{pct_text}"
+
+
 def _render_candidate_detail(candidate: pd.Series) -> None:
     st.markdown("##### Candidate detail")
-    m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("MD2 price", f"£{candidate['price_m']:.2f}m")
-    m2.metric(
+    row1 = st.columns(5)
+    row1[0].metric("MD2 price", f"£{candidate['price_m']:.2f}m")
+    row1[1].metric("Cost / saving", _cost_saving_label(candidate.get("transfer_cost_m")))
+    row1[2].metric("Change since MD1", _price_movement_label(candidate))
+    row1[3].metric(
         "MD1 points",
         "—" if pd.isna(candidate.get("matchday_points")) else f"{candidate['matchday_points']:.0f}",
     )
-    m3.metric(
+    row1[4].metric(
         "API minutes",
         "—" if pd.isna(candidate.get("minutes")) else f"{candidate['minutes']:.0f}",
     )
-    m4.metric(
+
+    row2 = st.columns(2)
+    row2[0].metric(
         "Points/min",
         "—" if pd.isna(candidate.get("points_per_minute")) else f"{candidate['points_per_minute']:.2f}",
     )
-    m5.metric(
+    row2[1].metric(
         "API rating",
         "—" if pd.isna(candidate.get("rating")) else f"{candidate['rating']:.1f}",
     )
     st.caption(
+        "Change since MD1 is shown only where both published MD1 and captured MD2 prices exist. "
         "Points per minute can make short substitute appearances look unusually strong, so minutes are always shown alongside it."
     )
 
@@ -212,7 +254,8 @@ def _render_transfer_analysis(
         st.warning("No valid replacements are available within this budget.")
         return
 
-    valid["price_change_m"] = valid["price_m"] - outgoing_price
+    valid["transfer_cost_m"] = valid["price_m"] - outgoing_price
+    valid["cost_saving"] = valid["transfer_cost_m"].map(_cost_saving_label)
     valid["points_change"] = valid["matchday_points"] - pd.to_numeric(
         outgoing["matchday_points"], errors="coerce"
     )
@@ -252,7 +295,14 @@ def _render_transfer_analysis(
 
     rank_label = st.selectbox(
         "Rank shortlist by",
-        options=["MD1 points", "Points per minute", "Points per £m", "API rating", "Price"],
+        options=[
+            "MD1 points",
+            "Points per minute",
+            "Points per £m",
+            "API rating",
+            "Price rise since MD1",
+            "Price",
+        ],
         key=f"public_transfer_rank_{season}_{matchday}",
     )
     rank_column = {
@@ -260,6 +310,7 @@ def _render_transfer_analysis(
         "Points per minute": "points_per_minute",
         "Points per £m": "points_per_m",
         "API rating": "rating",
+        "Price rise since MD1": "week_price_change_pct",
         "Price": "price_m",
     }[rank_label]
     ascending = rank_label == "Price"
@@ -275,12 +326,14 @@ def _render_transfer_analysis(
         "player",
         "club",
         "price_m",
+        "cost_saving",
+        "week_price_change_m",
+        "week_price_change_pct",
         "matchday_points",
         "points_per_minute",
         "points_per_m",
         "minutes",
         "rating",
-        "price_change_m",
         "points_change",
     ]
     for column in view_columns:
@@ -291,12 +344,14 @@ def _render_transfer_analysis(
             "player": "Candidate",
             "club": "Club",
             "price_m": "MD2 price (£m)",
+            "cost_saving": "Cost / saving",
+            "week_price_change_m": "Change since MD1 (£m)",
+            "week_price_change_pct": "Change since MD1 (%)",
             "matchday_points": "MD1 points",
             "points_per_minute": "Points/min",
             "points_per_m": "Points per £m",
             "minutes": "API minutes",
             "rating": "API rating",
-            "price_change_m": "Price vs current (£m)",
             "points_change": "MD1 points vs current",
         }
     )
@@ -306,20 +361,23 @@ def _render_transfer_analysis(
         hide_index=True,
         column_config={
             "MD2 price (£m)": st.column_config.NumberColumn(format="%.2f"),
+            "Change since MD1 (£m)": st.column_config.NumberColumn(format="%+.2f"),
+            "Change since MD1 (%)": st.column_config.NumberColumn(format="%+.1f%%"),
             "MD1 points": st.column_config.NumberColumn(format="%.0f"),
             "Points/min": st.column_config.NumberColumn(format="%.2f"),
             "Points per £m": st.column_config.NumberColumn(format="%.1f"),
             "API minutes": st.column_config.NumberColumn(format="%.0f"),
             "API rating": st.column_config.NumberColumn(format="%.1f"),
-            "Price vs current (£m)": st.column_config.NumberColumn(format="%+.2f"),
             "MD1 points vs current": st.column_config.NumberColumn(format="%+.0f"),
         },
     )
     st.caption(
         f"{len(valid)} valid replacements in the full pool; {len(shortlist)} match the optional filters; "
-        f"showing the top {min(12, len(shortlist))}. Points/min is most useful alongside the minutes column, "
-        "especially for late substitutes and other small samples. Club and position use the latest published "
-        "historical context because explicit Matchday 2 planning context has not yet been captured."
+        f"showing the top {min(12, len(shortlist))}. Cost / saving compares the candidate with the selected "
+        "current player's planning value. Week-on-week price movement is shown only where both genuine MD1 "
+        "and captured MD2 prices exist. Points/min is most useful alongside the minutes column, especially "
+        "for late substitutes and other small samples. Club and position use the latest published historical "
+        "context because explicit Matchday 2 planning context has not yet been captured."
     )
 
 
