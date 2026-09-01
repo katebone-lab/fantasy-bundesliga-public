@@ -114,10 +114,46 @@ def _build_candidate_pool(
     planning["matchday_points"] = pd.to_numeric(
         planning["matchday_points"], errors="coerce"
     )
+    planning["minutes"] = pd.to_numeric(planning.get("minutes"), errors="coerce")
+    planning["rating"] = pd.to_numeric(planning.get("rating"), errors="coerce")
     planning["points_per_m"] = planning["matchday_points"].div(
         planning["price_m"].where(planning["price_m"] > 0)
     )
+    planning["points_per_minute"] = planning["matchday_points"].div(
+        planning["minutes"].where(planning["minutes"] > 0)
+    )
     return planning
+
+
+def _candidate_label(row: pd.Series) -> str:
+    points = "—" if pd.isna(row.get("matchday_points")) else f"{row['matchday_points']:.0f} pts"
+    minutes = "—" if pd.isna(row.get("minutes")) else f"{row['minutes']:.0f} min"
+    return f"{row['player']} · {row['club']} · £{row['price_m']:.2f}m · {points} · {minutes}"
+
+
+def _render_candidate_detail(candidate: pd.Series) -> None:
+    st.markdown("##### Candidate detail")
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("MD2 price", f"£{candidate['price_m']:.2f}m")
+    m2.metric(
+        "MD1 points",
+        "—" if pd.isna(candidate.get("matchday_points")) else f"{candidate['matchday_points']:.0f}",
+    )
+    m3.metric(
+        "API minutes",
+        "—" if pd.isna(candidate.get("minutes")) else f"{candidate['minutes']:.0f}",
+    )
+    m4.metric(
+        "Points/min",
+        "—" if pd.isna(candidate.get("points_per_minute")) else f"{candidate['points_per_minute']:.2f}",
+    )
+    m5.metric(
+        "API rating",
+        "—" if pd.isna(candidate.get("rating")) else f"{candidate['rating']:.1f}",
+    )
+    st.caption(
+        "Points per minute can make short substitute appearances look unusually strong, so minutes are always shown alongside it."
+    )
 
 
 def _render_transfer_analysis(
@@ -181,25 +217,58 @@ def _render_transfer_analysis(
         outgoing["matchday_points"], errors="coerce"
     )
 
+    metric1, metric2, metric3 = st.columns(3)
+    metric1.metric("Current planning price", f"£{outgoing_price:.2f}m")
+    metric2.metric("Cash available", f"£{cash_m:.2f}m")
+    metric3.metric("Maximum replacement price", f"£{available_budget:.2f}m")
+
+    st.markdown("#### Explore candidates")
+    candidate_rows = valid.sort_values(["player", "club"]).reset_index(drop=True)
+    manual_index = st.selectbox(
+        "Inspect any valid candidate",
+        options=list(candidate_rows.index),
+        format_func=lambda index: _candidate_label(candidate_rows.loc[index]),
+        key=f"public_transfer_candidate_{season}_{matchday}_{outgoing_name}",
+    )
+    _render_candidate_detail(candidate_rows.loc[manual_index])
+
+    filter1, filter2 = st.columns(2)
+    played_only = filter1.checkbox(
+        "Only players who played in MD1",
+        value=False,
+        key=f"public_transfer_played_{season}_{matchday}",
+    )
+    known_points_only = filter2.checkbox(
+        "Known MD1 points only",
+        value=False,
+        key=f"public_transfer_known_points_{season}_{matchday}",
+    )
+
+    shortlist = valid.copy()
+    if played_only:
+        shortlist = shortlist[shortlist["minutes"].fillna(0) > 0]
+    if known_points_only:
+        shortlist = shortlist[shortlist["matchday_points"].notna()]
+
     rank_label = st.selectbox(
         "Rank shortlist by",
-        options=["MD1 points", "Points per £m", "API rating", "Price"],
+        options=["MD1 points", "Points per minute", "Points per £m", "API rating", "Price"],
         key=f"public_transfer_rank_{season}_{matchday}",
     )
     rank_column = {
         "MD1 points": "matchday_points",
+        "Points per minute": "points_per_minute",
         "Points per £m": "points_per_m",
         "API rating": "rating",
         "Price": "price_m",
     }[rank_label]
     ascending = rank_label == "Price"
 
-    metric1, metric2, metric3 = st.columns(3)
-    metric1.metric("Current planning price", f"£{outgoing_price:.2f}m")
-    metric2.metric("Cash available", f"£{cash_m:.2f}m")
-    metric3.metric("Maximum replacement price", f"£{available_budget:.2f}m")
+    if shortlist.empty:
+        st.info("No candidates match the optional filters. Clear a filter to see the full valid pool again.")
+        return
 
-    ranked = valid.sort_values(
+    ranked = shortlist.sort_values(
         rank_column, ascending=ascending, na_position="last"
     ).head(12)
     view_columns = [
@@ -207,6 +276,7 @@ def _render_transfer_analysis(
         "club",
         "price_m",
         "matchday_points",
+        "points_per_minute",
         "points_per_m",
         "minutes",
         "rating",
@@ -222,6 +292,7 @@ def _render_transfer_analysis(
             "club": "Club",
             "price_m": "MD2 price (£m)",
             "matchday_points": "MD1 points",
+            "points_per_minute": "Points/min",
             "points_per_m": "Points per £m",
             "minutes": "API minutes",
             "rating": "API rating",
@@ -236,6 +307,7 @@ def _render_transfer_analysis(
         column_config={
             "MD2 price (£m)": st.column_config.NumberColumn(format="%.2f"),
             "MD1 points": st.column_config.NumberColumn(format="%.0f"),
+            "Points/min": st.column_config.NumberColumn(format="%.2f"),
             "Points per £m": st.column_config.NumberColumn(format="%.1f"),
             "API minutes": st.column_config.NumberColumn(format="%.0f"),
             "API rating": st.column_config.NumberColumn(format="%.1f"),
@@ -244,9 +316,10 @@ def _render_transfer_analysis(
         },
     )
     st.caption(
-        f"{len(valid)} valid replacements found; showing the top {min(12, len(valid))}. "
-        "Club and position use the latest published historical context because explicit Matchday 2 "
-        "planning context has not yet been captured."
+        f"{len(valid)} valid replacements in the full pool; {len(shortlist)} match the optional filters; "
+        f"showing the top {min(12, len(shortlist))}. Points/min is most useful alongside the minutes column, "
+        "especially for late substitutes and other small samples. Club and position use the latest published "
+        "historical context because explicit Matchday 2 planning context has not yet been captured."
     )
 
 
