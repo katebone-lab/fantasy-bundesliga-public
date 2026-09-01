@@ -1,0 +1,22 @@
+name: Validate fixture model
+
+on:
+  pull_request:
+    paths:
+      - 'fixture_model.py'
+      - 'ui/public_team_tab.py'
+      - 'data/fixture_model/**'
+      - 'scripts/validate_fixture_model.py'
+      - '.github/workflows/validate-fixture-model.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python scripts/validate_fixture_model.py
