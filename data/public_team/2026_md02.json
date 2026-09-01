@@ -1,0 +1,24 @@
+{
+  "season": 2026,
+  "matchday": 2,
+  "status": "draft",
+  "formation": "4-4-2",
+  "cash_m": 3.82,
+  "players": [
+    {"player": "Fabian Bredlow", "club": "VfB Stuttgart", "position": "GK", "slot": "starter", "starred": false, "last_squad_valuation_m": 4.81},
+    {"player": "Phillipp Mwene", "club": "1. FSV Mainz 05", "position": "DEF", "slot": "starter", "starred": false, "last_squad_valuation_m": 6.77},
+    {"player": "Nathaniel Brown", "club": "FC Bayern München", "position": "DEF", "slot": "starter", "starred": true, "last_squad_valuation_m": 15.50},
+    {"player": "Elias Baum", "club": "Eintracht Frankfurt", "position": "DEF", "slot": "starter", "starred": false, "last_squad_valuation_m": 5.00},
+    {"player": "Jan Gyamerah", "club": "SV Elversberg", "position": "DEF", "slot": "starter", "starred": false, "last_squad_valuation_m": 1.99},
+    {"player": "Michael Olise", "club": "FC Bayern München", "position": "MID", "slot": "starter", "starred": true, "last_squad_valuation_m": 37.51},
+    {"player": "Ezechiel Banzuzi", "club": "RB Leipzig", "position": "MID", "slot": "starter", "starred": false, "last_squad_valuation_m": 4.14},
+    {"player": "Adil Aouchiche", "club": "FC Schalke 04", "position": "MID", "slot": "starter", "starred": false, "last_squad_valuation_m": 6.48},
+    {"player": "Yuito Suzuki", "club": "SC Freiburg", "position": "MID", "slot": "starter", "starred": false, "last_squad_valuation_m": 7.73},
+    {"player": "Harry Kane", "club": "FC Bayern München", "position": "FOR", "slot": "starter", "starred": true, "last_squad_valuation_m": 38.11},
+    {"player": "Younes Ebnoutalib", "club": "Eintracht Frankfurt", "position": "FOR", "slot": "starter", "starred": false, "last_squad_valuation_m": 3.37},
+    {"player": "Keita Kosugi", "club": "Eintracht Frankfurt", "position": "DEF", "slot": "bench", "starred": false, "last_squad_valuation_m": 3.20},
+    {"player": "Matheo Raab", "club": "1. FC Union Berlin", "position": "GK", "slot": "bench", "starred": false, "last_squad_valuation_m": 6.84},
+    {"player": "Dejan Ljubičić", "club": "FC Schalke 04", "position": "MID", "slot": "bench", "starred": false, "last_squad_valuation_m": 2.71},
+    {"player": "Stefano Marino", "club": "SC Paderborn 07", "position": "FOR", "slot": "bench", "starred": false, "last_squad_valuation_m": 2.49}
+  ]
+}
