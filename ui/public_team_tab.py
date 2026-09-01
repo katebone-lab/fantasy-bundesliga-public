@@ -148,15 +148,15 @@ def _candidate_label(row: pd.Series) -> str:
     return f"{row['player']} · {row['club']} · £{row['price_m']:.2f}m · {points} · {minutes}"
 
 
-def _cost_saving_label(value: float | int | None) -> str:
+def _cash_impact_label(value: float | int | None) -> str:
     if value is None or pd.isna(value):
         return "—"
     value = float(value)
     if abs(value) < 0.005:
-        return "No change"
+        return "No cash change"
     if value > 0:
-        return f"£{value:.2f}m cost"
-    return f"£{abs(value):.2f}m saving"
+        return f"£{value:.2f}m needed"
+    return f"£{abs(value):.2f}m released"
 
 
 def _price_movement_label(candidate: pd.Series) -> str:
@@ -172,27 +172,33 @@ def _render_candidate_detail(candidate: pd.Series) -> None:
     st.markdown("##### Candidate detail")
     row1 = st.columns(5)
     row1[0].metric("MD2 price", f"£{candidate['price_m']:.2f}m")
-    row1[1].metric("Cost / saving", _cost_saving_label(candidate.get("transfer_cost_m")))
-    row1[2].metric("Change since MD1", _price_movement_label(candidate))
-    row1[3].metric(
+    row1[1].metric("Cash impact", _cash_impact_label(candidate.get("transfer_cost_m")))
+    row1[2].metric(
+        "Cash after transfer",
+        "—" if pd.isna(candidate.get("cash_after_transfer_m")) else f"£{candidate['cash_after_transfer_m']:.2f}m",
+    )
+    row1[3].metric("Change since MD1", _price_movement_label(candidate))
+    row1[4].metric(
         "MD1 points",
         "—" if pd.isna(candidate.get("matchday_points")) else f"{candidate['matchday_points']:.0f}",
     )
-    row1[4].metric(
+
+    row2 = st.columns(3)
+    row2[0].metric(
         "API minutes",
         "—" if pd.isna(candidate.get("minutes")) else f"{candidate['minutes']:.0f}",
     )
-
-    row2 = st.columns(2)
-    row2[0].metric(
+    row2[1].metric(
         "Points/min",
         "—" if pd.isna(candidate.get("points_per_minute")) else f"{candidate['points_per_minute']:.2f}",
     )
-    row2[1].metric(
+    row2[2].metric(
         "API rating",
         "—" if pd.isna(candidate.get("rating")) else f"{candidate['rating']:.1f}",
     )
     st.caption(
+        "Cash impact is the extra cash needed after selling the selected current player, or the cash released "
+        "if the replacement is cheaper. Cash after transfer shows the balance left for another move. "
         "Change since MD1 is shown only where both published MD1 and captured MD2 prices exist. "
         "Points per minute can make short substitute appearances look unusually strong, so minutes are always shown alongside it."
     )
@@ -255,14 +261,15 @@ def _render_transfer_analysis(
         return
 
     valid["transfer_cost_m"] = valid["price_m"] - outgoing_price
-    valid["cost_saving"] = valid["transfer_cost_m"].map(_cost_saving_label)
+    valid["cash_impact"] = valid["transfer_cost_m"].map(_cash_impact_label)
+    valid["cash_after_transfer_m"] = cash_m - valid["transfer_cost_m"]
     valid["points_change"] = valid["matchday_points"] - pd.to_numeric(
         outgoing["matchday_points"], errors="coerce"
     )
 
     metric1, metric2, metric3 = st.columns(3)
-    metric1.metric("Current planning price", f"£{outgoing_price:.2f}m")
-    metric2.metric("Cash available", f"£{cash_m:.2f}m")
+    metric1.metric("Selected player's value", f"£{outgoing_price:.2f}m")
+    metric2.metric("Cash before transfer", f"£{cash_m:.2f}m")
     metric3.metric("Maximum replacement price", f"£{available_budget:.2f}m")
 
     st.markdown("#### Explore candidates")
@@ -326,7 +333,8 @@ def _render_transfer_analysis(
         "player",
         "club",
         "price_m",
-        "cost_saving",
+        "cash_impact",
+        "cash_after_transfer_m",
         "week_price_change_m",
         "week_price_change_pct",
         "matchday_points",
@@ -344,7 +352,8 @@ def _render_transfer_analysis(
             "player": "Candidate",
             "club": "Club",
             "price_m": "MD2 price (£m)",
-            "cost_saving": "Cost / saving",
+            "cash_impact": "Cash impact",
+            "cash_after_transfer_m": "Cash after transfer (£m)",
             "week_price_change_m": "Change since MD1 (£m)",
             "week_price_change_pct": "Change since MD1 (%)",
             "matchday_points": "MD1 points",
@@ -361,6 +370,7 @@ def _render_transfer_analysis(
         hide_index=True,
         column_config={
             "MD2 price (£m)": st.column_config.NumberColumn(format="%.2f"),
+            "Cash after transfer (£m)": st.column_config.NumberColumn(format="%.2f"),
             "Change since MD1 (£m)": st.column_config.NumberColumn(format="%+.2f"),
             "Change since MD1 (%)": st.column_config.NumberColumn(format="%+.1f%%"),
             "MD1 points": st.column_config.NumberColumn(format="%.0f"),
@@ -373,11 +383,11 @@ def _render_transfer_analysis(
     )
     st.caption(
         f"{len(valid)} valid replacements in the full pool; {len(shortlist)} match the optional filters; "
-        f"showing the top {min(12, len(shortlist))}. Cost / saving compares the candidate with the selected "
-        "current player's planning value. Week-on-week price movement is shown only where both genuine MD1 "
-        "and captured MD2 prices exist. Points/min is most useful alongside the minutes column, especially "
-        "for late substitutes and other small samples. Club and position use the latest published historical "
-        "context because explicit Matchday 2 planning context has not yet been captured."
+        f"showing the top {min(12, len(shortlist))}. Cash impact shows how much of the current cash balance "
+        "the swap uses or releases after selling the selected player; cash after transfer is the remaining balance. "
+        "Week-on-week price movement is shown only where both genuine MD1 and captured MD2 prices exist. "
+        "Points/min is most useful alongside the minutes column, especially for late substitutes and other small samples. "
+        "Club and position use the latest published historical context because explicit Matchday 2 planning context has not yet been captured."
     )
 
 
