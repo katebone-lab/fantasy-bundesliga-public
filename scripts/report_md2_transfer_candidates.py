@@ -70,13 +70,17 @@ def main():
     output.sort(key=lambda x: (x['outgoing'], -(x['candidate_md1_points'] if x['candidate_md1_points'] is not None else -9999), -float(x['candidate_points_per_md2_m'] or 0)))
     fields = list(output[0]) if output else []
     with OUT.open('w', newline='', encoding='utf-8') as f:
-        w=csv.DictWriter(f, fieldnames=fields); w.writeheader(); w.writerows(output)
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        w.writerows(output)
     print(f'candidate_rows={len(output)}')
     for name in squad:
-        subset=[r for r in output if r['outgoing']==name][:5]
+        subset = [r for r in output if r['outgoing'] == name][:5]
         if subset:
-            print('\n'+name)
+            print('\n' + name)
             for r in subset:
                 print(f"  {r['candidate']}: pts={r['candidate_md1_points']} price={r['candidate_md2_price_m']} ppm={r['candidate_points_per_md2_m']} cash_after={r['cash_after_m']} gain={r['points_gain_vs_outgoing']}")
 
-if __name__ == '__main__': main()
+
+if __name__ == '__main__':
+    main()
