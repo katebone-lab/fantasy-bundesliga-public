@@ -1,0 +1,51 @@
+name: Publish MD1 opening prices
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/md1_opening_price_supplement.csv'
+      - 'scripts/apply_md1_opening_price_supplement.py'
+      - '.github/workflows/publish-md1-opening-prices.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply controlled MD1 price supplement
+        run: python scripts/apply_md1_opening_price_supplement.py
+      - name: Validate database
+        run: |
+          python - <<'PY'
+          import sqlite3
+          con = sqlite3.connect('data/fantasy_bundesliga.sqlite')
+          total = con.execute('''
+              SELECT COUNT(*)
+              FROM fantasy_player_prices fpp
+              JOIN matchdays md ON md.matchday_id = fpp.effective_matchday_id
+              JOIN seasons s ON s.season_id = md.season_id
+              WHERE s.start_year = 2026 AND md.matchday_number = 1
+          ''').fetchone()[0]
+          fk = con.execute('PRAGMA foreign_key_check').fetchall()
+          assert total == 255, total
+          assert not fk, fk
+          print(f'validated: md1_prices={total}, fk_violations={len(fk)}')
+          PY
+      - name: Commit published database
+        run: |
+          if git diff --quiet -- data/fantasy_bundesliga.sqlite; then
+            echo 'Database already contains the supplement; nothing to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/fantasy_bundesliga.sqlite
+          git commit -m 'Publish 14 reconciled MD1 opening prices'
+          git push
