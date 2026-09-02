@@ -111,16 +111,24 @@ def _build_candidate_pool(
             api_context, on=["player", "club"], how="left", suffixes=("", "_api")
         )
 
+    # Keep exact-matchday captured prices separate from the planning view's
+    # effective/last-known price. This lets new signings and zero-pointers remain
+    # visible without labelling an older price as a captured MD2 observation.
     price_history = repository.get_effective_prices(season, matchday).copy()
-    if not price_history.empty and {"player", "price_movement_m"}.issubset(
+    if not price_history.empty and {"player", "price_m", "price_movement_m"}.issubset(
         price_history.columns
     ):
-        price_history = price_history[["player", "price_movement_m"]].drop_duplicates(
+        price_history = price_history[["player", "price_m", "price_movement_m"]].drop_duplicates(
             subset=["player"], keep="first"
-        )
+        ).rename(columns={"price_m": "captured_matchday_price_m"})
         planning = planning.merge(price_history, on="player", how="left")
+        planning["price_source"] = planning["captured_matchday_price_m"].notna().map(
+            {True: f"Captured MD{matchday} price", False: "Last known price"}
+        )
     else:
+        planning["captured_matchday_price_m"] = pd.NA
         planning["price_movement_m"] = pd.NA
+        planning["price_source"] = "Last known price"
 
     planning["price_m"] = pd.to_numeric(planning["price_m"], errors="coerce")
     planning["price_movement_m"] = pd.to_numeric(
@@ -149,7 +157,8 @@ def _candidate_label(row: pd.Series) -> str:
     points = "—" if pd.isna(row.get("matchday_points")) else f"{row['matchday_points']:.0f} pts"
     minutes = "—" if pd.isna(row.get("minutes")) else f"{row['minutes']:.0f} min"
     fixture = row.get("fixture_label", "Unknown")
-    return f"{row['player']} · {row['club']} · £{row['price_m']:.2f}m · {points} · {minutes} · {fixture}"
+    price_basis = row.get("price_source", "Last known price")
+    return f"{row['player']} · {row['club']} · £{row['price_m']:.2f}m · {price_basis} · {points} · {minutes} · {fixture}"
 
 
 def _cash_impact_label(value: float | int | None) -> str:
@@ -172,10 +181,39 @@ def _price_movement_label(candidate: pd.Series) -> str:
     return f"{change:+.2f}m{pct_text}"
 
 
+def _fixture_badge_color(ease: float | int | None) -> str:
+    if ease is None or pd.isna(ease):
+        return "gray"
+    ease = float(ease)
+    if ease >= 60:
+        return "green"
+    if ease >= 40:
+        return "gray"
+    if ease >= 20:
+        return "orange"
+    return "red"
+
+
+def _lineup_badge_color(likelihood: float | int | None) -> str:
+    if likelihood is None or pd.isna(likelihood):
+        return "gray"
+    likelihood = float(likelihood)
+    if likelihood >= 80:
+        return "green"
+    if likelihood >= 60:
+        return "blue"
+    if likelihood >= 40:
+        return "orange"
+    return "red"
+
+
 def _render_candidate_detail(candidate: pd.Series) -> None:
     st.markdown("##### Candidate detail")
     row1 = st.columns(5)
-    row1[0].metric("MD2 price", f"£{candidate['price_m']:.2f}m")
+    price_source = candidate.get("price_source", "Last known price")
+    price_heading = "MD2 price" if str(price_source).startswith("Captured MD") else "Last known price"
+    row1[0].metric(price_heading, f"£{candidate['price_m']:.2f}m")
+    row1[0].caption(str(price_source))
     row1[1].metric("Cash impact", _cash_impact_label(candidate.get("transfer_cost_m")))
     row1[2].metric(
         "Cash after transfer",
@@ -211,13 +249,21 @@ def _render_candidate_detail(candidate: pd.Series) -> None:
     row3[1].metric(
         "Fixture ease",
         "—" if pd.isna(candidate.get("fixture_ease")) else f"{candidate['fixture_ease']:.0f}/100",
-        candidate.get("fixture_label") if pd.notna(candidate.get("fixture_ease")) else None,
     )
+    if pd.notna(candidate.get("fixture_ease")):
+        row3[1].badge(
+            str(candidate.get("fixture_label", "Unknown")),
+            color=_fixture_badge_color(candidate.get("fixture_ease")),
+        )
     row3[2].metric(
         "Lineup likelihood",
         "—" if pd.isna(candidate.get("lineup_likelihood")) else f"{candidate['lineup_likelihood']:.0f}%",
-        candidate.get("lineup_label") if pd.notna(candidate.get("lineup_likelihood")) else None,
     )
+    if pd.notna(candidate.get("lineup_likelihood")):
+        row3[2].badge(
+            str(candidate.get("lineup_label", "Unknown")),
+            color=_lineup_badge_color(candidate.get("lineup_likelihood")),
+        )
     row3[3].metric(
         "MD2 planning score",
         "—" if pd.isna(candidate.get("planning_score")) else f"{candidate['planning_score']:.0f}/100",
@@ -371,6 +417,7 @@ def _render_transfer_analysis(
         "lineup_label",
         "planning_score",
         "price_m",
+        "price_source",
         "cash_impact",
         "cash_after_transfer_m",
         "week_price_change_m",
@@ -396,7 +443,8 @@ def _render_transfer_analysis(
             "lineup_likelihood": "Lineup likelihood",
             "lineup_label": "MD1 role basis",
             "planning_score": "MD2 planning score",
-            "price_m": "MD2 price (£m)",
+            "price_m": "Planning price (£m)",
+            "price_source": "Price basis",
             "cash_impact": "Cash impact",
             "cash_after_transfer_m": "Cash after transfer (£m)",
             "week_price_change_m": "Price movement (£m)",
@@ -417,7 +465,7 @@ def _render_transfer_analysis(
             "Fixture ease": st.column_config.NumberColumn(format="%.0f"),
             "Lineup likelihood": st.column_config.NumberColumn(format="%.0f%%"),
             "MD2 planning score": st.column_config.NumberColumn(format="%.0f"),
-            "MD2 price (£m)": st.column_config.NumberColumn(format="%.2f"),
+            "Planning price (£m)": st.column_config.NumberColumn(format="%.2f"),
             "Cash after transfer (£m)": st.column_config.NumberColumn(format="%.2f"),
             "Price movement (£m)": st.column_config.NumberColumn(format="%+.2f"),
             "Price movement (%)": st.column_config.NumberColumn(format="%+.1f%%"),
@@ -433,7 +481,7 @@ def _render_transfer_analysis(
         f"{len(valid)} valid replacements in the full pool; {len(shortlist)} match the optional filters; showing the top {min(12, len(shortlist))}. "
         "Fixture ease is position-sensitive: forwards are driven mostly by the opponent's defensive strength, defenders/keepers mostly by opponent attacking strength, and midfielders use both. "
         "Team strength blends 70% 2025/26 evidence with 30% smoothed 2026/27 results, so Matchday 1 matters without overwhelming the prior. "
-        "The lineup percentage is an MD1-role prior, not a live injury/probable-lineup forecast. Club and position still use the latest published historical context where explicit Matchday 2 planning context has not yet been captured."
+        "The lineup percentage is an MD1-role prior, not a live injury/probable-lineup forecast. Price basis distinguishes an exact captured MD2 price from a last-known earlier price, so zero-pointers and new arrivals can remain in the candidate pool without overstating price certainty. Club and position still use the latest published historical context where explicit Matchday 2 planning context has not yet been captured."
     )
 
 
