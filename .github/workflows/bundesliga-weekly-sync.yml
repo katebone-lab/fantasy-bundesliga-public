@@ -1,0 +1,72 @@
+name: Bundesliga weekly sync review
+
+on:
+  workflow_dispatch:
+    inputs:
+      matchday:
+        description: Optional matchday override
+        required: false
+        type: string
+  schedule:
+    # Sunday evening provisional check; Monday morning final review.
+    - cron: '0 21 * * 0'
+    - cron: '0 8 * * 1'
+  pull_request:
+    paths:
+      - fixture_model.py
+      - scripts/bundesliga_official.py
+      - scripts/sync_bundesliga_results.py
+      - scripts/sync_bundesliga_schedule.py
+      - scripts/rebuild_fixture_model.py
+      - data/fixture_model/2026_results.csv
+      - .github/workflows/bundesliga-weekly-sync.yml
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+
+      - name: Compile sync code
+        run: python -m py_compile fixture_model.py scripts/bundesliga_official.py scripts/sync_bundesliga_results.py scripts/sync_bundesliga_schedule.py scripts/rebuild_fixture_model.py
+
+      - name: Fetch and validate results in review mode
+        env:
+          MATCHDAY_OVERRIDE: ${{ inputs.matchday }}
+        run: |
+          if [ -n "$MATCHDAY_OVERRIDE" ]; then
+            python scripts/sync_bundesliga_results.py --matchday "$MATCHDAY_OVERRIDE"
+          else
+            python scripts/sync_bundesliga_results.py
+          fi
+
+      - name: Review official schedule details
+        run: python scripts/sync_bundesliga_schedule.py
+
+      - name: Rebuild derived model in review mode
+        run: python scripts/rebuild_fixture_model.py
+
+      - name: Confirm review mode did not edit published data
+        run: |
+          if ! git diff --quiet -- data/fixture_model; then
+            echo 'Review mode unexpectedly changed published data.'
+            git diff -- data/fixture_model
+            exit 1
+          fi
+
+      - name: Upload sync review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundesliga-sync-review-${{ github.run_number }}
+          path: artifacts/bundesliga_sync/
+          if-no-files-found: warn
+          retention-days: 30
