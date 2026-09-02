@@ -18,9 +18,9 @@
       "season": 2026,
       "matchday": 2,
       "observed_at_utc": "2026-09-01T21:42:00Z",
-      "published_at_utc": "2026-09-02T18:58:44Z",
+      "published_at_utc": "2026-09-02T19:12:38Z",
       "status": "published",
-      "details": "Full 82-image ZIP capture reconciled against canonical player identities. MD1 fantasy points + authoritative MD2 transfer prices; duplicate overlaps reconciled and exact MD2 observations updated."
+      "details": "Full 82-image ZIP capture reconciled: 319 transfer-list player price observations checked, including 31 players absent from the original MD1 canonical set. MD1 fantasy points remain separate facts; MD2 prices are authoritative screenshot observations."
     }
   ]
 }
