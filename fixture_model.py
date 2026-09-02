@@ -8,8 +8,6 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parent
 DATA_ROOT = ROOT / "data" / "fixture_model"
-PRIOR_WEIGHT = 0.70
-CURRENT_WEIGHT = 0.30
 PROMOTED_ATTACK_FACTOR = 0.78
 PROMOTED_DEFENCE_FACTOR = 0.82
 CURRENT_SMOOTHING_MATCHES = 2.0
@@ -26,17 +24,51 @@ def _read(name: str) -> pd.DataFrame:
     return pd.read_csv(DATA_ROOT / name)
 
 
-def build_team_strengths() -> pd.DataFrame:
-    """Return early-season attack/defence strengths centred around 1.0.
+def _complete_current_results() -> tuple[pd.DataFrame, int]:
+    """Return only fully completed matchdays from the normalized results history.
 
-    The model intentionally keeps prior-season evidence separate from current results.
-    Retained Bundesliga clubs use their 2025/26 goals-for/goals-against rates directly.
-    Promoted clubs use their 2. Bundesliga rates with a conservative promotion adjustment.
-    Matchday 1 evidence is smoothed with two league-average pseudo-matches before being
-    blended 70/30 with the prior, so one result can move a rating without dominating it.
+    Sunday/provisional results may be stored without making the strength model jump during
+    the weekend. A matchday enters the model only when all nine Bundesliga fixtures exist.
+    """
+    path = DATA_ROOT / "2026_results.csv"
+    if not path.exists():
+        legacy = _read("2026_md01_results.csv")
+        return legacy, 1
+
+    results = pd.read_csv(path)
+    if results.empty:
+        return results, 0
+    if "status" in results.columns:
+        results = results[results["status"].astype(str).str.lower().eq("final")].copy()
+    complete_mds = [
+        int(md)
+        for md, group in results.groupby("matchday")
+        if len(group) == 9
+    ]
+    if not complete_mds:
+        return results.iloc[0:0].copy(), 0
+    return results[results["matchday"].isin(complete_mds)].copy(), max(complete_mds)
+
+
+def season_evidence_weights(completed_matchdays: int) -> tuple[float, float]:
+    """Increase current-season authority gradually as evidence accumulates.
+
+    MD1 = 30% current, MD3 = 40%, MD5 = 50%, MD10 = 75%; capped at 85% current.
+    """
+    current_weight = min(0.85, 0.25 + 0.05 * max(int(completed_matchdays), 1))
+    return 1.0 - current_weight, current_weight
+
+
+def build_team_strengths() -> pd.DataFrame:
+    """Return attack/defence strengths centred around 1.0.
+
+    Prior-season evidence and current Bundesliga results remain separate. Promoted clubs
+    receive an explicit adjustment to their 2. Bundesliga prior. Current-season evidence
+    only includes complete matchdays and gains weight gradually through the season.
     """
     prior = _read("2025_26_prior.csv")
-    results = _read("2026_md01_results.csv")
+    results, completed_matchdays = _complete_current_results()
+    prior_weight, current_weight = season_evidence_weights(completed_matchdays)
 
     retained = prior[prior["source_league"] == "Bundesliga"].copy()
     avg_prior_goals = (retained["goals_for"] / retained["played"]).mean()
@@ -48,40 +80,53 @@ def build_team_strengths() -> pd.DataFrame:
     prior.loc[promoted, "prior_attack"] *= PROMOTED_ATTACK_FACTOR
     prior.loc[promoted, "prior_defence"] *= PROMOTED_DEFENCE_FACTOR
 
-    home = results[["home_club", "home_goals", "away_goals"]].rename(
-        columns={"home_club": "club", "home_goals": "gf", "away_goals": "ga"}
-    )
-    away = results[["away_club", "away_goals", "home_goals"]].rename(
-        columns={"away_club": "club", "away_goals": "gf", "home_goals": "ga"}
-    )
-    current = pd.concat([home, away], ignore_index=True).groupby("club", as_index=False).agg(
-        games=("gf", "size"), gf=("gf", "sum"), ga=("ga", "sum")
-    )
-    league_goal_rate = current["gf"].sum() / current["games"].sum()
-    smooth = CURRENT_SMOOTHING_MATCHES
-    current["smoothed_gf_pg"] = (current["gf"] + smooth * league_goal_rate) / (
-        current["games"] + smooth
-    )
-    current["smoothed_ga_pg"] = (current["ga"] + smooth * league_goal_rate) / (
-        current["games"] + smooth
-    )
-    current["current_attack"] = current["smoothed_gf_pg"] / league_goal_rate
-    current["current_defence"] = league_goal_rate / current["smoothed_ga_pg"]
+    if results.empty:
+        current = prior[["club"]].copy()
+        current["current_attack"] = 1.0
+        current["current_defence"] = 1.0
+    else:
+        home = results[["home_club", "home_goals", "away_goals"]].rename(
+            columns={"home_club": "club", "home_goals": "gf", "away_goals": "ga"}
+        )
+        away = results[["away_club", "away_goals", "home_goals"]].rename(
+            columns={"away_club": "club", "away_goals": "gf", "home_goals": "ga"}
+        )
+        current = pd.concat([home, away], ignore_index=True).groupby("club", as_index=False).agg(
+            games=("gf", "size"), gf=("gf", "sum"), ga=("ga", "sum")
+        )
+        league_goal_rate = current["gf"].sum() / current["games"].sum()
+        smooth = CURRENT_SMOOTHING_MATCHES
+        current["smoothed_gf_pg"] = (current["gf"] + smooth * league_goal_rate) / (
+            current["games"] + smooth
+        )
+        current["smoothed_ga_pg"] = (current["ga"] + smooth * league_goal_rate) / (
+            current["games"] + smooth
+        )
+        current["current_attack"] = current["smoothed_gf_pg"] / league_goal_rate
+        current["current_defence"] = league_goal_rate / current["smoothed_ga_pg"]
 
-    strength = prior.merge(current, on="club", how="left", validate="one_to_one")
+    strength = prior.merge(
+        current[["club", "current_attack", "current_defence"]],
+        on="club",
+        how="left",
+        validate="one_to_one",
+    )
     strength["current_attack"] = strength["current_attack"].fillna(1.0)
     strength["current_defence"] = strength["current_defence"].fillna(1.0)
     strength["attack_strength"] = (
-        PRIOR_WEIGHT * strength["prior_attack"] + CURRENT_WEIGHT * strength["current_attack"]
+        prior_weight * strength["prior_attack"] + current_weight * strength["current_attack"]
     )
     strength["defence_strength"] = (
-        PRIOR_WEIGHT * strength["prior_defence"] + CURRENT_WEIGHT * strength["current_defence"]
+        prior_weight * strength["prior_defence"] + current_weight * strength["current_defence"]
     )
     strength["overall_strength"] = np.sqrt(
         strength["attack_strength"] * strength["defence_strength"]
     )
     strength["attack_strength_pct"] = strength["attack_strength"].rank(pct=True) * 100
     strength["defence_strength_pct"] = strength["defence_strength"].rank(pct=True) * 100
+    strength["prior_weight"] = prior_weight
+    strength["current_weight"] = current_weight
+    strength["completed_matchdays"] = completed_matchdays
     return strength[
         [
             "club",
@@ -95,16 +140,15 @@ def build_team_strengths() -> pd.DataFrame:
             "overall_strength",
             "attack_strength_pct",
             "defence_strength_pct",
+            "prior_weight",
+            "current_weight",
+            "completed_matchdays",
         ]
     ].sort_values("overall_strength", ascending=False)
 
 
 def build_fixture_ratings(matchday: int = 2) -> pd.DataFrame:
-    """Return one row per club with opponent and position-neutral fixture components.
-
-    Higher ease scores are better for the player's club. They are percentile ranks among
-    the 18 teams on the matchday rather than externally supplied FDR numbers.
-    """
+    """Return one row per club with opponent and position-neutral fixture components."""
     fixtures = _read("2026_md02_fixtures.csv")
     fixtures = fixtures[fixtures["matchday"] == matchday].copy()
     strengths = build_team_strengths().set_index("club")
@@ -162,11 +206,6 @@ def fixture_label(ease: float | int | None) -> str:
 
 
 def lineup_likelihood(minutes: float | int | None, substitute: bool | None) -> tuple[float, str]:
-    """Convert the MD1 role into a deliberately conservative MD2 lineup proxy.
-
-    This is not a predicted team sheet. It is an auditable role prior that can later be
-    overridden by injury/news/probable-lineup evidence closer to the deadline.
-    """
     if minutes is None or pd.isna(minutes) or float(minutes) <= 0:
         return 20.0, "Low · no MD1 appearance"
     minutes = float(minutes)
@@ -186,7 +225,6 @@ def lineup_likelihood(minutes: float | int | None, substitute: bool | None) -> t
 
 
 def add_planning_components(frame: pd.DataFrame, matchday: int = 2) -> pd.DataFrame:
-    """Attach fixture, role and transparent composite planning components to players."""
     if frame.empty:
         return frame.copy()
     out = frame.copy()
@@ -219,8 +257,6 @@ def add_planning_components(frame: pd.DataFrame, matchday: int = 2) -> pd.DataFr
     value = pd.to_numeric(out.get("points_per_m"), errors="coerce")
     points_pct = points.rank(pct=True) * 100
     value_pct = value.rank(pct=True) * 100
-
-    # Missing MD1 points/value stay neutral rather than being silently treated as zero.
     out["performance_component"] = points_pct.fillna(50.0)
     out["value_component"] = value_pct.fillna(50.0)
     out["planning_score"] = (
