@@ -107,6 +107,13 @@ def check_conflicts(proposed: pd.DataFrame) -> None:
         raise SystemExit("Published score conflict; manual review required:\n" + rows.to_string(index=False))
 
 
+def _write_legacy_matchday(combined: pd.DataFrame, matchday: int) -> None:
+    frame = combined[combined["matchday"] == matchday][
+        ["matchday", "home_club", "away_club", "home_goals", "away_goals", "source"]
+    ].copy()
+    frame.to_csv(DATA / f"2026_md{matchday:02d}_results.csv", index=False)
+
+
 def merge_results(proposed: pd.DataFrame) -> int:
     existing = pd.read_csv(RESULTS_PATH)
     check_conflicts(proposed)
@@ -118,6 +125,8 @@ def merge_results(proposed: pd.DataFrame) -> int:
     combined = pd.concat([existing, new_rows], ignore_index=True)
     combined = combined.sort_values(["matchday", "played_at", "home_club"], na_position="last")
     combined.to_csv(RESULTS_PATH, index=False)
+    for matchday in sorted(new_rows["matchday"].unique()):
+        _write_legacy_matchday(combined, int(matchday))
     return len(new_rows)
 
 
