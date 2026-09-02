@@ -28,6 +28,7 @@ ALIASES = {
     "Frankfurt": "Eintracht Frankfurt",
     "Augsburg": "FC Augsburg",
     "Freiburg": "SC Freiburg",
+    "Sport-Club Freiburg": "SC Freiburg",
     "Stuttgart": "VfB Stuttgart",
     "Dortmund": "Borussia Dortmund",
     "Hamburg": "Hamburger SV",
@@ -168,7 +169,6 @@ def parse_events(html: str) -> list[MatchEvent]:
                     continue
                 key = (event.home_club, event.away_club)
                 previous = found.get(key)
-                # Prefer the richer representation when the same fixture appears repeatedly.
                 if previous is None or (
                     previous.home_goals is None and event.home_goals is not None
                 ) or (previous.kickoff is None and event.kickoff is not None):
