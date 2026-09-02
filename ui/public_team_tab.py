@@ -158,7 +158,10 @@ def _candidate_label(row: pd.Series) -> str:
     minutes = "—" if pd.isna(row.get("minutes")) else f"{row['minutes']:.0f} min"
     fixture = row.get("fixture_label", "Unknown")
     price_basis = row.get("price_source", "Last known price")
-    return f"{row['player']} · {row['club']} · £{row['price_m']:.2f}m · {price_basis} · {points} · {minutes} · {fixture}"
+    affordability = row.get("affordability", "")
+    score = row.get("next_md_score")
+    score_text = "—" if pd.isna(score) else f"MD2 {score:.0f}/100"
+    return f"{row['player']} · {row['club']} · £{row['price_m']:.2f}m · {affordability} · {score_text} · {price_basis} · {points} · {minutes} · {fixture}"
 
 
 def _cash_impact_label(value: float | int | None) -> str:
@@ -239,7 +242,7 @@ def _render_candidate_detail(candidate: pd.Series) -> None:
         "—" if pd.isna(candidate.get("rating")) else f"{candidate['rating']:.1f}",
     )
 
-    row3 = st.columns(4)
+    row3 = st.columns(5)
     opponent = candidate.get("opponent")
     venue = candidate.get("venue")
     row3[0].metric(
@@ -265,14 +268,19 @@ def _render_candidate_detail(candidate: pd.Series) -> None:
             color=_lineup_badge_color(candidate.get("lineup_likelihood")),
         )
     row3[3].metric(
-        "MD2 planning score",
+        "Best placed for MD2",
+        "—" if pd.isna(candidate.get("next_md_score")) else f"{candidate['next_md_score']:.0f}/100",
+    )
+    row3[4].metric(
+        "Planning score",
         "—" if pd.isna(candidate.get("planning_score")) else f"{candidate['planning_score']:.0f}/100",
     )
 
     st.caption(
         "Fixture ease is calculated from a transparent team-strength model: 70% prior-season attack/defence evidence and 30% smoothed current-season results, with a small home/away adjustment. "
         "Lineup likelihood is currently an MD1-role proxy based on whether the player started and how many minutes they played; it is not a predicted team sheet and should later be overridden by injury/news/probable-lineup evidence. "
-        "The planning score combines MD1 performance (30%), value (15%), fixture (30%) and lineup likelihood (25%). Each component remains visible so the score is not a black box."
+        "Best placed for MD2 is deliberately more forward-looking: fixture 35%, lineup likelihood 30%, team strength 20%, MD1 performance 10% and value 5%. "
+        "The broader planning score remains available separately and combines MD1 performance (30%), value (15%), fixture (30%) and lineup likelihood (25%)."
     )
 
 
@@ -317,26 +325,41 @@ def _render_transfer_analysis(
         team.loc[team["player"] != outgoing_name, "club"].value_counts().to_dict()
     )
 
-    valid = candidates[
+    market = candidates[
         (candidates["fantasy_position"] == outgoing["position"])
         & (~candidates["player"].isin(squad_names))
         & (candidates["price_m"].notna())
-        & (candidates["price_m"] <= available_budget)
     ].copy()
-    valid = valid[
-        valid["club"].map(lambda club: remaining_club_counts.get(club, 0) < 3)
+    market = market[
+        market["club"].map(lambda club: remaining_club_counts.get(club, 0) < 3)
     ].copy()
 
-    if valid.empty:
-        st.warning("No valid replacements are available within this budget.")
+    if market.empty:
+        st.warning("No same-position candidates are available.")
         return
 
-    valid["transfer_cost_m"] = valid["price_m"] - outgoing_price
-    valid["cash_impact"] = valid["transfer_cost_m"].map(_cash_impact_label)
-    valid["cash_after_transfer_m"] = cash_m - valid["transfer_cost_m"]
-    valid["points_change"] = valid["matchday_points"] - pd.to_numeric(
+    market["transfer_cost_m"] = market["price_m"] - outgoing_price
+    market["cash_impact"] = market["transfer_cost_m"].map(_cash_impact_label)
+    market["cash_after_transfer_m"] = cash_m - market["transfer_cost_m"]
+    market["over_budget_m"] = market["price_m"] - available_budget
+    market["affordability"] = market["over_budget_m"].map(
+        lambda value: "Affordable" if value <= 0 else f"£{value:.2f}m over budget"
+    )
+    market["points_change"] = market["matchday_points"] - pd.to_numeric(
         outgoing["matchday_points"], errors="coerce"
     )
+
+    pool_mode = st.radio(
+        "Candidate pool",
+        options=["Best placed for MD2", "Affordable only"],
+        horizontal=True,
+        key=f"public_transfer_pool_{season}_{matchday}_{outgoing_name}",
+        help="Browse the whole same-position market by default, or restrict to players affordable from this sale plus current cash.",
+    )
+    valid = market.copy() if pool_mode == "Best placed for MD2" else market[market["price_m"] <= available_budget].copy()
+    if valid.empty:
+        st.warning("No affordable replacements are available. Switch to Best placed for MD2 to browse the full positional market.")
+        return
 
     metric1, metric2, metric3 = st.columns(3)
     metric1.metric("Selected player's value", f"£{outgoing_price:.2f}m")
@@ -344,7 +367,11 @@ def _render_transfer_analysis(
     metric3.metric("Maximum replacement price", f"£{available_budget:.2f}m")
 
     st.markdown("#### Explore candidates")
-    candidate_rows = valid.sort_values(["player", "club"]).reset_index(drop=True)
+    candidate_rows = valid.sort_values(
+        ["next_md_score", "lineup_likelihood", "fixture_ease", "player"],
+        ascending=[False, False, False, True],
+        na_position="last",
+    ).reset_index(drop=True)
     manual_index = st.selectbox(
         "Inspect any valid candidate",
         options=list(candidate_rows.index),
@@ -374,6 +401,7 @@ def _render_transfer_analysis(
     rank_label = st.selectbox(
         "Rank shortlist by",
         options=[
+            "Best placed for MD2",
             "MD2 planning score",
             "Fixture ease",
             "Lineup likelihood",
@@ -387,6 +415,7 @@ def _render_transfer_analysis(
         key=f"public_transfer_rank_{season}_{matchday}",
     )
     rank_column = {
+        "Best placed for MD2": "next_md_score",
         "MD2 planning score": "planning_score",
         "Fixture ease": "fixture_ease",
         "Lineup likelihood": "lineup_likelihood",
@@ -415,9 +444,12 @@ def _render_transfer_analysis(
         "fixture_label",
         "lineup_likelihood",
         "lineup_label",
+        "next_md_score",
+        "team_strength_component",
         "planning_score",
         "price_m",
         "price_source",
+        "affordability",
         "cash_impact",
         "cash_after_transfer_m",
         "week_price_change_m",
@@ -442,9 +474,12 @@ def _render_transfer_analysis(
             "fixture_label": "Fixture",
             "lineup_likelihood": "Lineup likelihood",
             "lineup_label": "MD1 role basis",
+            "next_md_score": "Best placed for MD2",
+            "team_strength_component": "Team strength",
             "planning_score": "MD2 planning score",
             "price_m": "Planning price (£m)",
             "price_source": "Price basis",
+            "affordability": "Affordability",
             "cash_impact": "Cash impact",
             "cash_after_transfer_m": "Cash after transfer (£m)",
             "week_price_change_m": "Price movement (£m)",
@@ -464,6 +499,8 @@ def _render_transfer_analysis(
         column_config={
             "Fixture ease": st.column_config.NumberColumn(format="%.0f"),
             "Lineup likelihood": st.column_config.NumberColumn(format="%.0f%%"),
+            "Best placed for MD2": st.column_config.NumberColumn(format="%.0f"),
+            "Team strength": st.column_config.NumberColumn(format="%.0f"),
             "MD2 planning score": st.column_config.NumberColumn(format="%.0f"),
             "Planning price (£m)": st.column_config.NumberColumn(format="%.2f"),
             "Cash after transfer (£m)": st.column_config.NumberColumn(format="%.2f"),
@@ -478,7 +515,8 @@ def _render_transfer_analysis(
         },
     )
     st.caption(
-        f"{len(valid)} valid replacements in the full pool; {len(shortlist)} match the optional filters; showing the top {min(12, len(shortlist))}. "
+        f"{len(market)} same-position players in the full market; {len(valid)} in the selected pool; {len(shortlist)} match the optional filters; showing the top {min(12, len(shortlist))}. "
+        "Best placed for MD2 is a forward-looking ranking: fixture 35%, lineup likelihood 30%, team strength 20%, MD1 performance 10% and value 5%. "
         "Fixture ease is position-sensitive: forwards are driven mostly by the opponent's defensive strength, defenders/keepers mostly by opponent attacking strength, and midfielders use both. "
         "Team strength blends 70% 2025/26 evidence with 30% smoothed 2026/27 results, so Matchday 1 matters without overwhelming the prior. "
         "The lineup percentage is an MD1-role prior, not a live injury/probable-lineup forecast. Price basis distinguishes an exact captured MD2 price from a last-known earlier price, so zero-pointers and new arrivals can remain in the candidate pool without overstating price certainty. Club and position still use the latest published historical context where explicit Matchday 2 planning context has not yet been captured."

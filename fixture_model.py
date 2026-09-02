@@ -80,6 +80,8 @@ def build_team_strengths() -> pd.DataFrame:
     strength["overall_strength"] = np.sqrt(
         strength["attack_strength"] * strength["defence_strength"]
     )
+    strength["attack_strength_pct"] = strength["attack_strength"].rank(pct=True) * 100
+    strength["defence_strength_pct"] = strength["defence_strength"].rank(pct=True) * 100
     return strength[
         [
             "club",
@@ -91,6 +93,8 @@ def build_team_strengths() -> pd.DataFrame:
             "attack_strength",
             "defence_strength",
             "overall_strength",
+            "attack_strength_pct",
+            "defence_strength_pct",
         ]
     ].sort_values("overall_strength", ascending=False)
 
@@ -188,6 +192,10 @@ def add_planning_components(frame: pd.DataFrame, matchday: int = 2) -> pd.DataFr
     out = frame.copy()
     fixtures = build_fixture_ratings(matchday)
     out = out.merge(fixtures, on="club", how="left", validate="many_to_one")
+    strengths = build_team_strengths()[
+        ["club", "attack_strength_pct", "defence_strength_pct"]
+    ]
+    out = out.merge(strengths, on="club", how="left", validate="many_to_one")
 
     out["fixture_ease"] = out.apply(
         lambda row: position_fixture_ease(
@@ -220,5 +228,26 @@ def add_planning_components(frame: pd.DataFrame, matchday: int = 2) -> pd.DataFr
         + 0.15 * out["value_component"]
         + 0.30 * out["fixture_ease"].fillna(50.0)
         + 0.25 * out["lineup_likelihood"].fillna(20.0)
+    )
+
+    def _team_component(row: pd.Series) -> float:
+        position = str(row.get("fantasy_position"))
+        attack = row.get("attack_strength_pct")
+        defence = row.get("defence_strength_pct")
+        attack = 50.0 if pd.isna(attack) else float(attack)
+        defence = 50.0 if pd.isna(defence) else float(defence)
+        if position in {"GK", "DEF"}:
+            return defence
+        if position == "FOR":
+            return attack
+        return 0.55 * attack + 0.45 * defence
+
+    out["team_strength_component"] = out.apply(_team_component, axis=1)
+    out["next_md_score"] = (
+        0.35 * out["fixture_ease"].fillna(50.0)
+        + 0.30 * out["lineup_likelihood"].fillna(20.0)
+        + 0.20 * out["team_strength_component"].fillna(50.0)
+        + 0.10 * out["performance_component"]
+        + 0.05 * out["value_component"]
     )
     return out
