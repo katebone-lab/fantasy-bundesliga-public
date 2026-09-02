@@ -1,0 +1,64 @@
+matchday,home_club,away_club,date_window,source
+2,VfB Stuttgart,1. FC Köln,2026-09-04,https://www.bundesliga.com/en/bundesliga/matchday/en/2
+2,SC Paderborn 07,SC Freiburg,2026-09-05,https://www.bundesliga.com/en/bundesliga/matchday/en/2
+2,SV Werder Bremen,RB Leipzig,2026-09-05,https://www.bundesliga.com/en/bundesliga/matchday/en/2
+2,Borussia Mönchengladbach,SV Elversberg,2026-09-05,https://www.bundesliga.com/en/bundesliga/matchday/en/2
+2,Bayer 04 Leverkusen,1. FC Union Berlin,2026-09-05,https://www.bundesliga.com/en/bundesliga/matchday/en/2
+2,TSG Hoffenheim,Borussia Dortmund,2026-09-05,https://www.bundesliga.com/en/bundesliga/matchday/en/2
+2,FC Schalke 04,FC Bayern München,2026-09-05,https://www.bundesliga.com/en/bundesliga/matchday/en/2
+2,Hamburger SV,1. FSV Mainz 05,2026-09-06,https://www.bundesliga.com/en/bundesliga/matchday/en/2
+2,Eintracht Frankfurt,FC Augsburg,2026-09-06,https://www.bundesliga.com/en/bundesliga/matchday/en/2
+3,1. FC Union Berlin,FC Schalke 04,2026-09-11,https://www.bundesliga.com/en/bundesliga/matchday/en/3
+3,1. FSV Mainz 05,Eintracht Frankfurt,2026-09-12,https://www.bundesliga.com/en/bundesliga/matchday/en/3
+3,FC Augsburg,Bayer 04 Leverkusen,2026-09-12,https://www.bundesliga.com/en/bundesliga/matchday/en/3
+3,SC Freiburg,Borussia Mönchengladbach,2026-09-12,https://www.bundesliga.com/en/bundesliga/matchday/en/3
+3,TSG Hoffenheim,VfB Stuttgart,2026-09-12,https://www.bundesliga.com/en/bundesliga/matchday/en/3
+3,Borussia Dortmund,SC Paderborn 07,2026-09-12,https://www.bundesliga.com/en/bundesliga/matchday/en/3
+3,1. FC Köln,SV Werder Bremen,2026-09-12,https://www.bundesliga.com/en/bundesliga/matchday/en/3
+3,RB Leipzig,Hamburger SV,2026-09-13,https://www.bundesliga.com/en/bundesliga/matchday/en/3
+3,SV Elversberg,FC Bayern München,2026-09-13,https://www.bundesliga.com/en/bundesliga/matchday/en/3
+4,FC Bayern München,1. FC Union Berlin,2026-09-18,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/4
+4,SV Werder Bremen,FC Augsburg,2026-09-19,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/4
+4,Hamburger SV,1. FC Köln,2026-09-19,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/4
+4,Borussia Mönchengladbach,1. FSV Mainz 05,2026-09-19,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/4
+4,Eintracht Frankfurt,SC Freiburg,2026-09-19,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/4
+4,VfB Stuttgart,Borussia Dortmund,2026-09-19,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/4
+4,Bayer 04 Leverkusen,RB Leipzig,2026-09-20,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/4
+4,FC Schalke 04,SV Elversberg,2026-09-20,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/4
+4,SC Paderborn 07,TSG Hoffenheim,2026-09-20,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/4
+5,SC Paderborn 07,VfB Stuttgart,2026-10-09/11,https://www.bundesliga.com/en/bundesliga/matchday/en/5
+5,1. FC Köln,Borussia Mönchengladbach,2026-10-09/11,https://www.bundesliga.com/en/bundesliga/matchday/en/5
+5,1. FC Union Berlin,SV Elversberg,2026-10-09/11,https://www.bundesliga.com/en/bundesliga/matchday/en/5
+5,1. FSV Mainz 05,Bayer 04 Leverkusen,2026-10-09/11,https://www.bundesliga.com/en/bundesliga/matchday/en/5
+5,FC Augsburg,FC Bayern München,2026-10-09/11,https://www.bundesliga.com/en/bundesliga/matchday/en/5
+5,SC Freiburg,FC Schalke 04,2026-10-09/11,https://www.bundesliga.com/en/bundesliga/matchday/en/5
+5,TSG Hoffenheim,Hamburger SV,2026-10-09/11,https://www.bundesliga.com/en/bundesliga/matchday/en/5
+5,RB Leipzig,Eintracht Frankfurt,2026-10-09/11,https://www.bundesliga.com/en/bundesliga/matchday/en/5
+5,Borussia Dortmund,SV Werder Bremen,2026-10-09/11,https://www.bundesliga.com/en/bundesliga/matchday/en/5
+6,SV Elversberg,FC Augsburg,2026-10-16/18,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/6
+6,FC Schalke 04,1. FSV Mainz 05,2026-10-16/18,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/6
+6,SV Werder Bremen,SC Paderborn 07,2026-10-16/18,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/6
+6,Hamburger SV,VfB Stuttgart,2026-10-16/18,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/6
+6,Borussia Mönchengladbach,TSG Hoffenheim,2026-10-16/18,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/6
+6,1. FC Union Berlin,Borussia Dortmund,2026-10-16/18,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/6
+6,Eintracht Frankfurt,1. FC Köln,2026-10-16/18,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/6
+6,Bayer 04 Leverkusen,SC Freiburg,2026-10-16/18,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/6
+6,FC Bayern München,RB Leipzig,2026-10-16/18,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/6
+7,SC Paderborn 07,Hamburger SV,2026-10-23/25,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/7
+7,1. FC Köln,FC Schalke 04,2026-10-23/25,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/7
+7,1. FSV Mainz 05,SV Werder Bremen,2026-10-23/25,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/7
+7,FC Augsburg,1. FC Union Berlin,2026-10-23/25,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/7
+7,SC Freiburg,FC Bayern München,2026-10-23/25,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/7
+7,TSG Hoffenheim,Bayer 04 Leverkusen,2026-10-23/25,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/7
+7,VfB Stuttgart,Borussia Mönchengladbach,2026-10-23/25,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/7
+7,RB Leipzig,SV Elversberg,2026-10-23/25,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/7
+7,Borussia Dortmund,Eintracht Frankfurt,2026-10-23/25,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/7
+8,SV Elversberg,1. FSV Mainz 05,2026-10-30/11-01,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/8
+8,FC Schalke 04,RB Leipzig,2026-10-30/11-01,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/8
+8,SV Werder Bremen,TSG Hoffenheim,2026-10-30/11-01,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/8
+8,Borussia Mönchengladbach,SC Paderborn 07,2026-10-30/11-01,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/8
+8,1. FC Union Berlin,1. FC Köln,2026-10-30/11-01,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/8
+8,FC Augsburg,SC Freiburg,2026-10-30/11-01,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/8
+8,Eintracht Frankfurt,Hamburger SV,2026-10-30/11-01,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/8
+8,Bayer 04 Leverkusen,VfB Stuttgart,2026-10-30/11-01,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/8
+8,FC Bayern München,Borussia Dortmund,2026-10-30/11-01,https://www.bundesliga.com/en/bundesliga/matchday/2026-2027/8
