@@ -6,6 +6,8 @@ on:
     paths:
       - app.py
       - ui/fixtures_tab.py
+      - ui/provenance_panel.py
+      - data/provenance.json
       - fixture_model.py
       - data/fixture_model/**
       - .github/workflows/validate-fixtures-tabs.yml
@@ -36,4 +38,4 @@ jobs:
       - name: Validate fixture strength model
         run: python scripts/validate_fixture_model.py
       - name: Compile views
-        run: python -m py_compile app.py ui/fixtures_tab.py fixture_model.py
+        run: python -m py_compile app.py ui/fixtures_tab.py ui/provenance_panel.py fixture_model.py
