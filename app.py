@@ -18,6 +18,7 @@ from ui.context_selector import initialise_active_context, render_context_select
 from ui.fixtures_tab import render_fixtures_fdr_tab, render_league_table_tab
 from ui.leaders_tab import render_leaders_tab
 from ui.players_tab import render_players_tab
+from ui.provenance_panel import render_provenance_panel
 from ui.stats_tab import render_stats_tab
 
 
@@ -62,6 +63,7 @@ else:
         f"Fantasy Bundesliga Matchday {initial_context.matchday}, "
         "with optional API-Football match-stat matching."
     )
+render_provenance_panel()
 active_context = render_context_selectors(available_matchdays)
 active_season = active_context.season
 active_matchday = active_context.matchday
