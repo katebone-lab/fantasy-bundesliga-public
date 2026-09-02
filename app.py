@@ -15,6 +15,7 @@ from app_matching import merge_with_stats
 from data_repository import FantasyRepository
 from ui.components import display_summary_metrics, install_page_style
 from ui.context_selector import initialise_active_context, render_context_selectors
+from ui.fixtures_tab import render_fixtures_fdr_tab, render_league_table_tab
 from ui.leaders_tab import render_leaders_tab
 from ui.players_tab import render_players_tab
 from ui.stats_tab import render_stats_tab
@@ -120,13 +121,13 @@ display_summary_metrics(
 )
 
 if application_mode.is_public:
-    players_tab, team_tab, leaders_tab, stats_tab = st.tabs(
-        ["Players", "My Team", "Position leaders", "Match stats"]
+    players_tab, team_tab, leaders_tab, fixtures_tab, table_tab, stats_tab = st.tabs(
+        ["Players", "My Team", "Position leaders", "Fixtures & FDR", "League table", "Match stats"]
     )
     quality_tab = ingestion_tab = None
 else:
-    players_tab, team_tab, leaders_tab, stats_tab, quality_tab, ingestion_tab = st.tabs(
-        ["Players", "My Team", "Position leaders", "Match stats", "Data quality", "Ingestion"]
+    players_tab, team_tab, leaders_tab, fixtures_tab, table_tab, stats_tab, quality_tab, ingestion_tab = st.tabs(
+        ["Players", "My Team", "Position leaders", "Fixtures & FDR", "League table", "Match stats", "Data quality", "Ingestion"]
     )
 
 with players_tab:
@@ -148,6 +149,12 @@ if team_tab is not None:
 
 with leaders_tab:
     render_leaders_tab(fantasy, active_season, active_matchday)
+
+with fixtures_tab:
+    render_fixtures_fdr_tab()
+
+with table_tab:
+    render_league_table_tab()
 
 with stats_tab:
     render_stats_tab(
