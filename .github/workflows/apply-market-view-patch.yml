@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - scripts/apply_market_view_patch.py
+      - scripts/apply_market_view_patch_v2.py
       - .github/workflows/apply-market-view-patch.yml
 
 permissions:
@@ -22,20 +22,8 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Adapt patch helper to current provenance columns
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/apply_market_view_patch.py')
-          text = path.read_text(encoding='utf-8')
-          old = '''        "planning_score",\n        "price_m",\n        "cash_impact",\n'''
-          new = '''        "planning_score",\n        "price_m",\n        "price_source",\n        "cash_impact",\n'''
-          if old not in text:
-              raise SystemExit('Could not adapt view-columns patch block')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
-          PY
       - name: Apply market-view patch
-        run: python scripts/apply_market_view_patch.py
+        run: python scripts/apply_market_view_patch_v2.py
       - name: Validate fixture model
         run: python scripts/validate_fixture_model.py
       - name: Compile changed modules
