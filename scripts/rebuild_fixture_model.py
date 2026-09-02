@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pandas as pd
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
 from fixture_model import build_team_strengths, season_evidence_weights
 
-ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "fixture_model"
 RESULTS = DATA / "2026_results.csv"
 
