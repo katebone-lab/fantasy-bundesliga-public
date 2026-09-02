@@ -1,0 +1,39 @@
+name: Validate fixtures and FDR views
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - app.py
+      - ui/fixtures_tab.py
+      - fixture_model.py
+      - data/fixture_model/**
+      - .github/workflows/validate-fixtures-tabs.yml
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Validate schedule coverage
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          p='data/fixture_model/2026_fixtures_md02_md08.csv'
+          f=pd.read_csv(p)
+          assert len(f)==63, len(f)
+          counts=f.groupby('matchday').size().to_dict()
+          assert counts=={2:9,3:9,4:9,5:9,6:9,7:9,8:9}, counts
+          assert not f.duplicated(['matchday','home_club','away_club']).any()
+          clubs=set(f.home_club)|set(f.away_club)
+          assert len(clubs)==18, len(clubs)
+          print('fixture_rows=63 matchdays=2-8 clubs=18')
+          PY
+      - name: Validate fixture strength model
+        run: python scripts/validate_fixture_model.py
+      - name: Compile views
+        run: python -m py_compile app.py ui/fixtures_tab.py fixture_model.py
