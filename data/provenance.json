@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "tracking_started_at_utc": "2026-09-02T11:30:00Z",
+  "events": [
+    {
+      "kind": "fantasy_screenshot",
+      "label": "MD1 opening-price screenshot capture",
+      "season": 2026,
+      "matchday": 1,
+      "observed_at_utc": null,
+      "published_at_utc": "2026-09-01T00:00:00Z",
+      "status": "published",
+      "details": "Historical capture already reconciled and published; original upload timestamp was not recorded in the provenance log."
+    },
+    {
+      "kind": "fantasy_screenshot",
+      "label": "Post-MD1 transfer-window screenshot capture",
+      "season": 2026,
+      "matchday": 2,
+      "observed_at_utc": null,
+      "published_at_utc": "2026-09-02T00:00:00Z",
+      "status": "published",
+      "details": "MD1 fantasy points and MD2 prices. Historical upload timestamp was not backfilled; future ZIP captures will record the exact upload/capture event."
+    }
+  ]
+}
