@@ -20,6 +20,7 @@ from ui.leaders_tab import render_leaders_tab
 from ui.players_tab import render_players_tab
 from ui.provenance_panel import render_provenance_panel
 from ui.stats_tab import render_stats_tab
+from ui.transfer_centre_tab import render_transfer_centre_tab
 
 
 ROOT = Path(__file__).resolve().parent
@@ -52,7 +53,7 @@ except Exception as exc:
 
 st.title("Fantasy Bundesliga Lab")
 if application_mode.is_public:
-    st.caption("Public read-only deployment · build transfer-analysis-2026-09-01")
+    st.caption("Public read-only deployment · build transfer-sandbox-v1")
 if initial_context.fantasy_player_count:
     st.caption(
         f"Manual Fantasy Bundesliga Matchday {initial_context.matchday} data, "
@@ -123,13 +124,13 @@ display_summary_metrics(
 )
 
 if application_mode.is_public:
-    players_tab, team_tab, leaders_tab, fixtures_tab, table_tab, stats_tab = st.tabs(
-        ["Players", "My Team", "Position leaders", "Fixtures & FDR", "League table", "Match stats"]
+    players_tab, team_tab, transfer_tab, leaders_tab, fixtures_tab, table_tab, stats_tab = st.tabs(
+        ["Players", "My Team", "Transfer Centre", "Position leaders", "Fixtures & FDR", "League table", "Match stats"]
     )
     quality_tab = ingestion_tab = None
 else:
-    players_tab, team_tab, leaders_tab, fixtures_tab, table_tab, stats_tab, quality_tab, ingestion_tab = st.tabs(
-        ["Players", "My Team", "Position leaders", "Fixtures & FDR", "League table", "Match stats", "Data quality", "Ingestion"]
+    players_tab, team_tab, transfer_tab, leaders_tab, fixtures_tab, table_tab, stats_tab, quality_tab, ingestion_tab = st.tabs(
+        ["Players", "My Team", "Transfer Centre", "Position leaders", "Fixtures & FDR", "League table", "Match stats", "Data quality", "Ingestion"]
     )
 
 with players_tab:
@@ -148,6 +149,9 @@ if team_tab is not None:
                 planning_combined,
                 planning_matchday,
             )
+
+with transfer_tab:
+    render_transfer_centre_tab(repository)
 
 with leaders_tab:
     render_leaders_tab(fantasy, active_season, active_matchday)
