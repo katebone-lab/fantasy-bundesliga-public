@@ -35,6 +35,7 @@ if application_mode.is_public:
 if application_mode.allows_writes:
     from fantasy_ingestion.repository import FantasyIngestionRepository
     from ui.ingestion_tab import render_ingestion_tab
+    from ui.outlook_tab import render_outlook_tab
     from ui.quality_tab import render_quality_tab
     from ui.team_tab import render_team_tab
 
@@ -127,10 +128,10 @@ if application_mode.is_public:
     players_tab, team_tab, transfer_tab, leaders_tab, fixtures_tab, table_tab, stats_tab = st.tabs(
         ["Players", "My Team", "Transfer Centre", "Position leaders", "Fixtures & FDR", "League table", "Match stats"]
     )
-    quality_tab = ingestion_tab = None
+    outlook_tab = quality_tab = ingestion_tab = None
 else:
-    players_tab, team_tab, transfer_tab, leaders_tab, fixtures_tab, table_tab, stats_tab, quality_tab, ingestion_tab = st.tabs(
-        ["Players", "My Team", "Transfer Centre", "Position leaders", "Fixtures & FDR", "League table", "Match stats", "Data quality", "Ingestion"]
+    players_tab, team_tab, transfer_tab, leaders_tab, fixtures_tab, table_tab, stats_tab, outlook_tab, quality_tab, ingestion_tab = st.tabs(
+        ["Players", "My Team", "Transfer Centre", "Position leaders", "Fixtures & FDR", "League table", "Match stats", "Matchday Outlook", "Data quality", "Ingestion"]
     )
 
 with players_tab:
@@ -166,6 +167,10 @@ with stats_tab:
     render_stats_tab(
         stats, stats_path, combined, active_matchday, not fantasy.empty
     )
+
+if outlook_tab is not None:
+    with outlook_tab:
+        render_outlook_tab(repository, active_season, active_matchday)
 
 if quality_tab is not None:
     with quality_tab:
